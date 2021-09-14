@@ -377,6 +377,8 @@ class LogicTwitch(LogicModuleBase):
     size_limit = P.ModelSetting.get('twitch_file_size_limit')
     chunk_size = P.ModelSetting.get_int('streamlink_chunk_size')
 
+    try_index = 1
+    max_try = 5
     while True:
       init_values = {
         'online': self._is_online(streamer_id),
@@ -393,8 +395,11 @@ class LogicTwitch(LogicModuleBase):
       self._set_download_status(streamer_id, init_values)
       if self._is_safe_to_start(streamer_id):
         break
+      if try_index > max_try:
+        raise Exception('Cannot retrieve stream info')
       import time
       time.sleep(0.5)
+      try_index += 1
     
     self._set_download_directory(streamer_id)
     filename_format = self._parse_string_from_format(streamer_id, download_filename_format)
