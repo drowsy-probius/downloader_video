@@ -588,6 +588,7 @@ class LogicTwitch(LogicModuleBase):
       self._set_download_status(streamer_id, {'current_part_number': next_part_number})
       if not '{part_number}' in filename_format: # filename_format 에 {part_number} 가 없을 때
         filename_format = filename_format + ' part{part_number}'
+        self._set_download_status(streamer_id, {'filename_format': filename_format})
       filename = filename_format.replace('{part_number}', str(next_part_number))
     else:
       filename = filename_format.replace('{part_number}', '')
