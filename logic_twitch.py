@@ -22,10 +22,6 @@ logger = P.logger
 ModelSetting = P.ModelSetting
 
 #########################################################
-# global utils
-#########################################################
-
-#########################################################
 # main logic
 #########################################################
 '''
@@ -35,6 +31,7 @@ audio_only 를 단순히 mp3로 저장하니까 플레이어에 따라 문제가
 class LogicTwitch(LogicModuleBase):
   db_default = {
     'twitch_db_version': '1',
+    'twitch_use_ffmpeg': 'True',
     'twitch_download_path': os.path.join(path_data, P.package_name, 'twitch'),
     'twitch_filename_format': '[%Y-%m-%d %H:%M][{category}] {title} part{part_number}',
     'twitch_directory_name_format': '{author} ({streamer_id})/%Y-%m',
@@ -757,6 +754,367 @@ class LogicTwitch(LogicModuleBase):
       'options': [],
     }
     self._set_download_status(streamer_id, default_values)
+
+
+#########################################################
+# entity
+# plugin/ffmpeg/interface_program_ffmpeg.py 여기서 가져오고 싶은데
+# 고쳐할 부분이 꽤 있음. 그래서 그냥 새로 만들래
+#########################################################
+class TwitchDownloader():
+  '''
+  다운로드 클래스
+  나중에 상속받아서 thread_function하고 log_thread_function 정도만 수정하면 될 듯
+
+  external_listener: main logic의 리스너
+  url: m3u8
+  filename: {part_number}를 제외하고 키워드 치환된 파일 명
+  save_path: 키워드 치환된 폴더 경로
+  quality: 1080p60, 1080p, ..., audio_only, ...
+  use_segment: 파일 분할 옵션
+  segment_size: 분할 시간 (분)
+  '''
+  from plugin.ffmpeg.logic import Status # ffmpeg 상관없이 상태 표시로 사용
+  def __init__(self, 
+    external_listener, url, filename, save_path, quality: str, 
+    use_segment: bool, segment_size: int):
+    self.external_listener = external_listener
+    self.url = url
+    self.filename = filename
+    self.save_path = save_path
+    self.quality = quality
+    self.use_segment = use_segment
+    self.segment_size = segment_size
+    self.file_extension = '.mp3' if self.quality == 'audio_only' else '.mp4'
+    self.filepath = self.get_filepath()
+    self.downloaded_files = []
+
+    self.thread = None
+    self.process = None
+    self.log_thread = None
+
+    self.stop = False # stop flag for naive downloader
+    self.status = Status.READY
+    self.current_bitrate = ''
+    self.current_speed = ''
+    self.start_time = None
+    self.end_time = None
+    self.download_time = None
+    self.filesize = 0
+    self.filesize_str = ''
+    self.download_speed = ''
+  
+  def start(self):
+    self.thread = threading.Thread(target=self.thread_function, args=())
+    self.thread.start()
+    self.start_time = datetime.now()
+    return self.get_delta()
+  
+  def stop(self):
+    try:
+      self.status = Status.USER_STOP
+      self.stop = True
+      self.kill()
+    except Exception as e:
+      logger.error(f'Exception: {e}')
+      logger.error(traceback.format_exc())
+  
+  def kill(self):
+    try:
+      if self.process is not None and self.process.poll() is None:
+        import psutil
+        process = psutil.Process(self.process.pid)
+        for proc in process.children(recursive=True):
+          proc.kill()
+        process.kill()
+      self.send_to_listener(**{
+        'type': 'status',
+        'status': -1, # killed
+        'data': self.get_data()
+      })
+    except Exception as e:
+      logger.error(f'Exception: {e}')
+      logger.error(traceback.format_exc())
+  
+  def get_filepath(self):
+    filepath = ''
+    filename = self.filename
+    if self.use_segment:
+      if '{part_number}' in filename:
+        filename.replace('{part_number}', '%02d')
+      else:
+        filename = filename + ' part%02d'
+    filename = filename + self.file_extension
+    filepath = os.path.join(self.save_path, filename)
+    return filepath
+  
+  def get_data(self):
+    elapsed_time = '' if self.start_time is None else str(datetime.now() - self.start_time).split('.')[0][5:]
+    data = {
+      'url': self.url,
+      'filepath': self.filepath,
+      'filename': self.filename,
+      'save_path': self.save_path,
+      'downloaded_files': self.downloaded_files,
+      'quality': self.quality,
+      'use_segment': self.use_segment,
+      'segment_size': self.segment_size,
+      'status': int(self.status),
+      'status_str': self.status.name,
+      'status_kor': str(self.status),
+      'current_bitrate': self.current_bitrate,
+      'current_speed': self.current_speed,
+      'elapsed_time': elapsed_time,
+      'start_time' : '' if self.start_time is None else str(self.start_time).split('.')[0][5:],
+      'end_time' : '' if self.end_time is None else str(self.end_time).split('.')[0][5:],
+      'download_time' : '' if self.download_time is None else '%02d:%02d' % (self.download_time.seconds/60, self.download_time.seconds%60),
+    }
+    if self.status == Status.COMPLETED:
+      data['filesize'] = self.filesize
+      data['filesize_str'] = Util.sizeof_fmt(self.filesize)
+      data['download_speed'] = Util.sizeof_fmt(self.filesize/self.download_time.seconds, suffix='Bytes/Second')
+    return data
+  
+  def send_to_listener(self, **arg):
+    self.external_listener(**arg)
+  
+  def thread_function(self):
+    pass
+  
+  def log_thread_function(self): # needed when subprocess called
+    pass
+
+
+class StreamlinkTwitchDownloader(TwitchDownloader):
+  def __init__(self, 
+    external_listener, url, filename, save_path, 
+    quality: str, use_segment: bool, segment_size: int,
+    opened_stream):
+    super().__init__(external_listener, url, filename, save_path, quality, use_segment, segment_size)
+    self.streamlink_stream = opened_stream
+  
+  def thread_function(self):
+    try:
+      chunk_size = 4096
+      update_interval_seconds = 3
+
+      before_time_for_speed = datetime.now()
+      current_time_for_speed = 0
+      before_bytes_for_speed = 0
+      current_bytes_for_speed = 0
+
+      if self.use_segment:
+        stop_flag = False
+        part_number = 1
+        while True and (not stop_flag):
+          filepath = self.filepath % part_number
+          with open(filepath, 'wb') as target:
+            self.downloaded_files.append(filepath)
+            logger.debug(f'Download segment files: {filepath}')
+            while True:
+              if self.stop:
+                stop_flag = True
+                break
+              try:
+                target.write(self.streamlink_stream.read(chunk_size))
+              except Exception as e:
+                logger.error(f'download exception: {e}')
+                logger.error(f'streamlink cannot read chunk OR maybe stream ends OR sjva cannot write birnay file')
+                stop_flag = True
+                break
+
+              self.filesize += chunk_size
+              self.elapsed_time_seconds = (datetime.now() - self.start_time).total_seconds()
+
+              current_time_for_speed = datetime.now()
+              time_diff_seconds = (current_time_for_speed - before_time_for_speed).total_seconds()
+              if time_diff_seconds > update_interval_seconds:
+                byte_diff = self.filesize - before_bytes_for_speed
+                before_time_for_speed = datetime.now()
+                before_bytes_for_speed = self.filesize
+                self.current_speed = self.get_speed_from_diff(time_diff_seconds, byte_diff)
+                self.send_to_listener(**{
+                  'type': 'status',
+                  'status': self.status,
+                  'data': self.get_data()
+                })
+              if self.elapsed_time_seconds / 60 > (part_number * self.segment_size):
+                break
+            target.close()
+          part_number += 1
+      else:
+        with open(self.filepath, 'wb') as target:
+          self.downloaded_files.append(self.filepath)
+          logger.debug(f'Download single file: {self.filepath}')
+          while True:
+            if self.stop:
+              stop_flag = True
+              break
+            try:
+              target.write(self.streamlink_stream.read(chunk_size))
+            except Exception as e:
+              logger.error(f'download exception: {e}')
+              logger.error(f'streamlink cannot read chunk OR maybe stream ends OR sjva cannot write birnay file')
+              break
+            self.filesize += chunk_size
+            self.elapsed_time_seconds = (datetime.now() - self.start_time).total_seconds()
+            current_time_for_speed = datetime.now()
+            time_diff_seconds = (current_time_for_speed - before_time_for_speed).total_seconds()
+            if time_diff_seconds > update_interval_seconds:
+              byte_diff = self.filesize - before_bytes_for_speed
+              before_time_for_speed = datetime.now()
+              before_bytes_for_speed = self.filesize
+              self.current_speed = self.get_speed_from_diff(time_diff_seconds, byte_diff)
+              self.send_to_listener(**{
+                'type': 'status',
+                'status': self.status,
+                'data': self.get_data()
+              })
+          target.close()
+      
+      self.streamlink_stream.close()
+      del self.streamlink_stream
+      if len(self.downloaded_files) > 0: # 어떤 이유로 종료되었는데 쓰레기 파일은 존재할 때
+        last_filepath = self.downloaded_files[-1]
+        if os.path.isfile(last_filepath) and os.path.getsize(last_filepath) < (512 * 1024):
+          shutil_task.remove(last_filepath)
+          self.downloaded_files = self.downloaded_files[:-1]
+          self.send_to_listener(**{
+            'type': 'status',
+            'status': self.status,
+            'data': self.get_data()
+          })
+    except Exception as e:
+      logger.error(f'Exception: {e}')
+      logger.error(traceback.format_exc())
+    
+  def get_speed_from_diff(time_diff, byte_diff):
+    return Util.sizeof_fmt(byte_diff/time_diff, suffix='Bytes/Second')
+
+
+class FfmpegTwitchDownloader(TwitchDownloader):
+  from plugin.ffmpeg.logic import Status
+  from plugin.ffmpeg.model import ModelSEtting as ffmpegModelSetting
+  def __init__(self, 
+    external_listener, url, filename, save_path,
+    quality:str, use_segment: bool, segment_size: int):
+    super().__init__(external_listener, url, filename, save_path, quality, use_segment, segment_size)
+    self.ffmpeg_bin = ffmpegModelSetting.get('ffmpeg_path')
+  
+  def thread_function(self):
+    try:
+      import subprocess
+      command = [self.ffmpeg_path, '-y', '-i', self.url, ]
+      if self.quality == "audio_only":
+        command = command + [
+          '-c', 'copy'
+        ]
+      else:
+        command = command + [
+          '-c', 'copy',
+          '-bsf:a', 'aac_adtstoasc'
+        ]
+      if self.use_segment:
+        command = command + [
+          '-f', 'segment',
+          '-segment_time', self.segment_size * 60,
+        ]
+      command = command + [self.filepath]
+
+      self.process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        universal_newlines=True,
+        encoding='utf8'
+      )
+      self.log_thread = threading.Thread(target=self.log_thread_function, args=())
+      self.log_thread.start()
+    except Exception as e:
+      logger.error(f'Exception: {e}')
+      logger.error(traceback.format_exc())
+  
+  def log_thread_function(self):
+    with self.process.stdout:
+      for line in iter(self.process.stdout.readline, b''):
+        try:
+          if self.status == Status.READY:
+            if line.find('Server returned 404 Not Found') != -1 or line.find('Unknown error') != -1:
+              self.status = ffmpeg.WRONG_URL
+              continue # 남은 line 있을 수 있으니 continue
+            if line.find('No such file or directory') != -1:
+              self.status = ffmpeg.WRONG_DIRECTORY
+              continue
+
+            # 이거 전체 길이 계산하는 것같은데 m3u8에서도 작동 함? 
+            match = re.compile(r'Duration\:\s(\d{2})\:(\d{2})\:(\d{2})\.(\d{2})\,\sstart').search(line)
+            if match:
+              self.duration_str = f'{match.group(1)}:{match.group(2)}:{match.group(3)}'
+              self.duration = int(match.group(4))
+              self.duration += int(match.group(3)) * 100
+              self.duration += int(match.group(2)) * 100 * 60
+              self.duration += int(match.group(1)) * 100 * 60 * 60
+              if match:
+                self.status = Status.READY
+                arg = {'type':'status_change', 'status':self.status, 'data' : self.get_data()}
+                self.send_to_listener(**{
+                  'type': 'status',
+                  'status': self.status,
+                  'data': self.get_data()
+                })
+              continue
+            # 다운로드 첫 시작 지점
+            match = re.compile(r'time\=(\d{2})\:(\d{2})\:(\d{2})\.(\d{2})\sbitrate\=\s*(?P<bitrate>\d+).*?[$|\s](\s?speed\=\s*(?P<speed>.*?)x)?').search(line)
+            if match:
+              self.status = Status.DOWNLOADING
+              self.send_to_listener(**{
+                'type': 'status',
+                'status': self.status,
+                'data': self.get_data()
+              })
+          elif self.status == Status.DOWNLOADING:
+            if line.find('HTTP error 403 Forbidden') != -1:
+              self.status = Status.HTTP_FORBIDDEN
+              self.kill()
+              continue
+
+            match = re.compile(r'time\=(\d{2})\:(\d{2})\:(\d{2})\.(\d{2})\sbitrate\=\s*(?P<bitrate>\d+).*?[$|\s](\s?speed\=\s*(?P<speed>.*?)x)?').search(line)
+            if match: 
+              self.current_duration = int(match.group(4))
+              self.current_duration += int(match.group(3)) * 100
+              self.current_duration += int(match.group(2)) * 100 * 60
+              self.current_duration += int(match.group(1)) * 100 * 60 * 60
+              try:
+                self.percent = int(self.current_duration * 100 / self.duration)
+              except: pass
+              self.current_bitrate = match.group('bitrate')
+              self.current_speed = match.group('speed')
+              self.download_time = datetime.now() - self.start_time
+              self.send_to_listener(**{
+                'type': 'status',
+                'status': self.status,
+                'data': self.get_data()
+              })
+              continue
+            # m3u8 끝날 때 직접 확인하기
+            match = re.compile(r'video\:\d*kB\saudio\:\d*kB').search(line)
+            if match:
+              self.status = Status.COMPLETED
+              self.end_time = datetime.now()
+              self.download_time = self.end_time - self.start_time
+              self.send_to_listener(**{
+                'type': 'status',
+                'status': self.status,
+                'data': self.get_data()
+              })
+              continue
+        except Exception as e:
+          logger.error(f'Exception: {e}')
+          logger.error(traceback.format_exc())
+    
+    # stdout 끝났을 때 여기서 프로세스 종료해도 될려나
+    self.log_thread = None
+    self.kill()
 
 
 #########################################################
