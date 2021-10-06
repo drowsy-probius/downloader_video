@@ -792,8 +792,8 @@ class TwitchDownloader():
     self.thread = None
     self.process = None
     self.log_thread = None
-
     self.stop = False # stop flag for naive downloader
+
     self.status = Status.READY
     self.current_bitrate = ''
     self.current_speed = ''
@@ -808,7 +808,7 @@ class TwitchDownloader():
     self.thread = threading.Thread(target=self.thread_function, args=())
     self.thread.start()
     self.start_time = datetime.now()
-    return self.get_delta()
+    return self.get_data()
   
   def stop(self):
     try:
