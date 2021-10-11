@@ -26,7 +26,10 @@ ModelSetting = P.ModelSetting
 #########################################################
 '''
 TODO:
-audio_only 를 단순히 mp3로 저장하니까 플레이어에 따라 문제가 있음.
+다운로더 클래스에서
+from ffmpeg.logic import Status 이거 안되는거같은데 
+
+우선 code-server에서 디버깅어케하냐고 
 '''
 class LogicTwitch(LogicModuleBase):
   db_default = {
