@@ -35,8 +35,8 @@ class LogicTwitch(LogicModuleBase):
     'twitch_download_path': os.path.join(path_data, P.package_name, 'twitch'),
     'twitch_filename_format': '[%Y-%m-%d %H:%M][{category}] {title} part{part_number}',
     'twitch_directory_name_format': '{author} ({streamer_id})/%Y-%m',
-    'twitch_file_split_by_size': 'True',
-    'twitch_file_size_limit': '2.0 GB',
+    'twitch_file_use_segment': 'True',
+    'twitch_file_segment_size': '32',
     'twitch_streamer_ids': '',
     'twitch_auto_make_folder': 'True',
     'twitch_auto_start': 'False',
@@ -51,10 +51,14 @@ class LogicTwitch(LogicModuleBase):
     'streamlink_options': 'False', # html 토글 위한 쓰레기 값임.
   }
   is_streamlink_installed = False
-  
+  streamlink_session = None
   streamlink_plugins = {}
   '''
   'streamer_id': <StreamlinkTwitchPlugin> 
+  '''
+  downloader = {}
+  '''
+  'streamer_id': <TwtichDownloader> 
   '''
   download_status = {}
   '''
@@ -66,21 +70,28 @@ class LogicTwitch(LogicModuleBase):
     'author': str,
     'title': str,
     'category': str,
-    'started_time': 0 or datetime object,
-    'quality': '',
-    'download_directory': '',
-    'download_filenames': [],
-    'filename_format': '',  
-    'do_split': bool, 
-    'size_limit': '',
-    'current_part_number': 1,
-    'size': 0,
-    'elapsed_time': '',
-    'speed': '',
-    'streams': {},
+    'url': str,
+    'filepath': str, // {part_number} 교체하기 전 경로
+    'filename': str, // {part_number} 교체하기 전 이름
+    'save_path': str, // 다운로드 디렉토리
+    'downloaded_files: [],
+    'quality': str,
+    'use_segment': bool,
+    'segment_size': int,
+    'status': int,
+    'status_str': str,
+    'status_kor': str,
+    'current_bitrate': str,
+    'current_speed': str,
+    'elapsed_time': datetime,
+    'start_time': str,
+    'end_time': str,
+    'download_time': str,
+    'filesize': int, // total size
+    'filesize_str': str,
+    'download_speed': str, // average speed
   }
   '''
-  streamlink_session = None
 
 
   def __init__(self, P):
@@ -105,7 +116,7 @@ class LogicTwitch(LogicModuleBase):
   def process_ajax(self, sub, req):
     try:
       if sub == 'entity_list': # status 초기화
-        return jsonify(self._get_download_status_for_javascript())
+        return jsonify(self.download_status)
       elif sub == 'toggle':
         streamer_id = req.form['streamer_id']
         command = req.form['command']
@@ -114,9 +125,9 @@ class LogicTwitch(LogicModuleBase):
         }
         if command == 'disable':
           result['previous_status'] = 'online' if self.download_status[streamer_id]['online'] else 'offline'
-          self._set_download_status(streamer_id, {'enable': False})
+          self.set_download_status(streamer_id, {'enable': False})
         elif command == 'enable':
-          self._set_download_status(streamer_id, {'enable': True})
+          self.set_download_status(streamer_id, {'enable': True})
         return jsonify(result)
       elif sub == 'install':
         LogicTwitch._install_streamlink()
@@ -160,13 +171,13 @@ class LogicTwitch(LogicModuleBase):
     new_streamer_ids = [id for id in streamer_ids if id not in before_streamer_ids]
     for streamer_id in old_streamer_ids: 
       if self.download_status[streamer_id]['running']:
-        self._set_download_status(streamer_id, {'enable': False})
+        self.set_download_status(streamer_id, {'enable': False})
       else:
         del self.streamlink_plugins[streamer_id]
         del self.download_status[streamer_id]
     for streamer_id in new_streamer_ids:
-      self._clear_properties(streamer_id)
-    self._set_streamlink_options()
+      self.clear_properties(streamer_id)
+    self.set_streamlink_options()
 
 
   def scheduler_function(self):
@@ -178,7 +189,7 @@ class LogicTwitch(LogicModuleBase):
       if self.streamlink_session is None:
         import streamlink
         self.streamlink_session = streamlink.Streamlink()
-        self._set_streamlink_options()
+        self.set_streamlink_options()
 
       streamer_ids = [id for id in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not id.startswith('#')]
       for streamer_id in streamer_ids:
@@ -189,11 +200,10 @@ class LogicTwitch(LogicModuleBase):
         if self.streamlink_plugins[streamer_id] is None:
           url = 'https://www.twitch.tv/' + streamer_id
           self.streamlink_plugins[streamer_id] = self.streamlink_session.resolve_url(url)
-        is_online = self._is_online(streamer_id)
-        if not is_online:
+        if not self.is_online(streamer_id):
           continue
-        self._set_download_status(streamer_id, {'running': True})
-        t = threading.Thread(target=self._download_thread_function, args=(streamer_id, ))
+        self.set_download_status(streamer_id, {'running': True})
+        t = threading.Thread(target=self.download_thread_function, args=(streamer_id, ))
         t.setDaemon(True)
         t.start()
     except Exception as e:
@@ -206,7 +216,7 @@ class LogicTwitch(LogicModuleBase):
       import streamlink
       self.is_streamlink_installed = True
       self.streamlink_session = streamlink.Streamlink()
-      self._set_streamlink_options()
+      self.set_streamlink_options()
     except:
       return False
     if not os.path.isdir(P.ModelSetting.get('twitch_download_path')):
@@ -214,7 +224,7 @@ class LogicTwitch(LogicModuleBase):
     ModelTwitchItem.plugin_load()
     streamer_ids = [id for id in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not id.startswith('#')]
     for streamer_id in streamer_ids:
-      self._clear_properties(streamer_id)
+      self.clear_properties(streamer_id)
 
 
   def reset_db(self):
@@ -227,7 +237,7 @@ class LogicTwitch(LogicModuleBase):
 
   # imported from soju6jan/klive/logic_streamlink.py
   @staticmethod
-  def _install_streamlink():
+  def install_streamlink():
     try:
       def func():
         import system
@@ -248,32 +258,55 @@ class LogicTwitch(LogicModuleBase):
       logger.error(traceback.format_exc())
 
 
-  def _is_online(self, streamer_id):
+  def is_online(self, streamer_id):
     return len(self._get_streams(streamer_id)) > 0
 
 
-  def _get_title(self, streamer_id):
+  def get_title(self, streamer_id):
     return self.streamlink_plugins[streamer_id].get_title()
 
 
-  def _get_author(self, streamer_id):
+  def get_author(self, streamer_id):
     return self.streamlink_plugins[streamer_id].get_author()
 
 
-  def _get_category(self, streamer_id):
+  def get_category(self, streamer_id):
     return self.streamlink_plugins[streamer_id].get_category()
   
 
-  def _get_streams(self, streamer_id):
+  def get_streams(self, streamer_id):
     return self.streamlink_plugins[streamer_id].streams()
   
 
-  def _get_streams_url_dict(self, streamer_id):
-    streams = self._get_streams(streamer_id)
+  def get_streams_url_dict(self, streamer_id):
+    streams = self.get_streams(streamer_id)
     return {q:streams[q].url for q in streams}
 
 
-  def _get_options(self):
+  def get_quality(self, streamer_id):
+    quality = ''
+    available_streams = self.get_streams(streamer_id)
+    quality_options = [i.strip() for i in P.ModelSetting.get('streamlink_quality').split(',')]
+    for candidate_quality in quality_options:
+      if candidate_quality in available_streams:
+        quality = candidate_quality
+        break
+    if quality == '':
+      raise Exception(f'No available streams for qualities: {quality_options}')
+    if quality in ['best', 'worst']: # mostly convert best -> 1080p60, worst -> 160p
+      for q in available_streams:
+        if available_streams[q].url == available_streams[quality].url and q != quality:
+          quality = q
+          break
+    return qaulity
+  
+
+  def get_url(self, streamer_id):
+    quality = self.get_quality(streamer_id)
+    return self.get_streams(streamer_id)[quality].url
+
+
+  def get_options(self):
     '''
     from P.Modelsetting produces list for options list
     '''
@@ -293,9 +326,9 @@ class LogicTwitch(LogicModuleBase):
     return options
 
 
-  def _get_options_string(self):
+  def get_options_string(self):
     result = ''
-    options = self._get_options()
+    options = self.get_options()
     for tup in options:
       if len(tup) == 2:
         result += tup[0] + ' ' + str(tup[1]) + '\n'
@@ -304,8 +337,8 @@ class LogicTwitch(LogicModuleBase):
     return result
 
 
-  def _set_streamlink_options(self):
-    options = self._get_options()
+  def set_streamlink_options(self):
+    options = self.get_options()
     for option in options:
       if len(option) == 2:
         self.streamlink_session.set_option(option[0], option[1])
@@ -313,27 +346,27 @@ class LogicTwitch(LogicModuleBase):
         self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
 
 
-  def _set_download_directory(self, streamer_id):
+  def set_save_path(self, streamer_id):
     ''' 
-    make download_directory and
-    set 'download_directory'
+    make save_path and
+    set 'save_path'
     '''
     download_base_directory = P.ModelSetting.get('twitch_download_path')
     download_make_directory = P.ModelSetting.get_bool('twitch_auto_make_folder')
-    download_directory_format = P.ModelSetting.get('twitch_directory_name_format')
-    download_directory_string = ''
+    save_path_format = P.ModelSetting.get('twitch_directory_name_format')
+    save_path_string = ''
     if download_make_directory:
-      download_directory_string = '/'.join([
-        self._replace_unavailable_characters_in_filename(self._parse_string_from_format(streamer_id, directory_format) )
-        for directory_format in download_directory_format.split('/')
+      save_path_string = '/'.join([
+        self.replace_unavailable_characters_in_filename(self.parse_string_from_format(streamer_id, directory_format) )
+        for directory_format in save_path_format.split('/')
       ])
-    download_directory = os.path.join(download_base_directory, download_directory_string)
-    if not os.path.isdir(download_directory):
-      os.makedirs(download_directory, exist_ok=True)
-    self._set_download_status(streamer_id, {'download_directory': download_directory})
+    save_path = os.path.join(download_base_directory, save_path_string)
+    if not os.path.isdir(save_path):
+      os.makedirs(save_path, exist_ok=True)
+    self.set_download_status(streamer_id, {'save_path': save_path})
 
 
-  def _is_safe_to_start(self, streamer_id):
+  def is_safe_to_start(self, streamer_id):
     '''
     check is online and
     author, title, category is string, not None and
@@ -346,314 +379,68 @@ class LogicTwitch(LogicModuleBase):
       self.download_status[streamer_id]['chunk_size'] > 0
 
 
-  def _failed_thread_handler(self, streamer_id):
-    if len(self.download_status[streamer_id]['download_filenames']) == 0:
-      ModelTwitchItem.delete_by_id(self.download_status[streamer_id]['db_id'])
-    else:
-      directory_name = self.download_status[streamer_id]['download_directory']
-      last_filename = self.download_status[streamer_id]['download_filenames'][-1]
-      last_filepath = os.path.join(directory_name, last_filename)
-      if os.path.isfile(last_filepath) and os.path.getsize(last_filepath) < (512 * 1024):
-        shutil_task.remove(last_filepath)
-        self._set_download_self.download_status[streamer_id](streamer_id, {'download_filenames': self.download_status[streamer_id]['download_filenames'][:-1]})
-        if len(self.download_status[streamer_id]['download_filenames']) == 0:
-          ModelTwitchItem.delete_by_id(self.download_status[streamer_id]['db_id'])
-    self._clear_properties(streamer_id)
-    if streamer_id not in [id for id in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not id.startswith('#')]:
-      del self.streamlink_plugins[streamer_id]
-      del self.download_status[streamer_id]
 
-
-  def _prepare_download(self, streamer_id):
+  def prepare_download(self, streamer_id):
     quality = ''
     filename_format = ''
 
     download_filename_format = P.ModelSetting.get('twitch_filename_format')
-    quality_options = [i.strip() for i in P.ModelSetting.get('streamlink_quality').split(',')]
-    do_split = P.ModelSetting.get_bool('twitch_file_split_by_size')
-    size_limit = P.ModelSetting.get('twitch_file_size_limit')
-    chunk_size = P.ModelSetting.get_int('streamlink_chunk_size')
 
     try_index = 1
     max_try = 5
     while True:
       init_values = {
-        'online': self._is_online(streamer_id),
-        'author': self._get_author(streamer_id),
-        'title': self._get_title(streamer_id),
-        'category': self._get_category(streamer_id),
-        'streams': self._get_streams_url_dict(streamer_id),
-        'started_time': datetime.now(),
-        'do_split': do_split,
-        'size_limit': size_limit,
-        'chunk_size': chunk_size,
-        'options': self._get_options(),
+        'online': self.is_online(streamer_id),
+        'author': self.get_author(streamer_id),
+        'title': self.get_title(streamer_id),
+        'category': self.get_category(streamer_id),
+        'quality': self.get_quality(streamer_id),
+        'url': self.get_url(streamer_id),
+        'options': self.get_options(),
       }
-      self._set_download_status(streamer_id, init_values)
-      if self._is_safe_to_start(streamer_id):
+      self.set_download_status(streamer_id, init_values)
+      if self.is_safe_to_start(streamer_id):
         break
       if try_index > max_try:
-        raise Exception('Cannot retrieve stream info')
+        raise Exception(f'Cannot retrieve stream info: {streamer_id}')
       import time
       time.sleep(0.5)
       try_index += 1
     
-    self._set_download_directory(streamer_id)
-    filename_format = self._parse_string_from_format(streamer_id, download_filename_format)
+    self.set_save_path(streamer_id)
+    filename_format = self.parse_string_from_format(streamer_id, download_filename_format)
     
-    for candidate_quality in quality_options:
-      if candidate_quality in self.download_status[streamer_id]['streams']:
-        quality = candidate_quality
-        break
-    
-    if quality == '':
-      raise Exception('[streamlink] Invalid quality set!')
-    
-    if quality in ['best', 'worst']: # convert best -> 1080p60, worst -> 160p
-      quality = [
-        _quality for _quality in self.download_status[streamer_id]['streams']
-        if self.download_status[streamer_id]['streams'][quality] == self.download_status[streamer_id]['streams'][_quality] and \
-          quality != _quality
-      ][0]
-      self._set_download_status(streamer_id, {'quality': quality})
-
     db_id = ModelTwitchItem.append(streamer_id, self.download_status[streamer_id])
-    ModelTwitchItem.set_option_value(db_id, self._get_options_string())
+    ModelTwitchItem.set_option_value(db_id, self.get_options_string())
 
     init_values2 = {
       'db_id': db_id,
-      'filename_format': filename_format,
-      'quality': quality,
+      'filename': filename_format,
     }
-    self._set_download_status(streamer_id, init_values2)
+    self.set_download_status(streamer_id, init_values2)
   # prepare ends
 
 
-  def _download_thread_function(self, streamer_id):
-    try:
-      self._prepare_download(streamer_id)
+  def download_thread_function(self, streamer_id):
+    def external_listener(values):
+      self.set_download_status(streamer_id, values)
 
-      from time import time
-      downloaded_bytes = 0
-      update_interval = 2 # secs
-
-      download_directory = self.download_status[streamer_id]['download_directory']
-      quality = self.download_status[streamer_id]['quality']
-      do_split = self.download_status[streamer_id]['do_split']
-      size_limit = self.download_status[streamer_id]['size_limit']
-      size_limit = self._byte_from_unit(size_limit)
-      chunk_size = self.download_status[streamer_id]['chunk_size']
-
-      stream = self._get_streams(streamer_id)[quality]
-
-      # download starts from here
-      opened_stream = stream.open()
-
-      started_time = time()
-      before_time_for_status = time()
-      current_time_for_status = time()
-      before_bytes_for_status = 0
-      current_bytes_for_status = 0
-
-      filepath = ''
-
-      if do_split:
-        stop_flag = False
-        while True and (not stop_flag):
-          filepath = self._get_filepath(streamer_id)
-          with open(filepath, 'wb') as target:
-            ModelTwitchItem.update(self.download_status[streamer_id])
-            logger.debug(f'Write file: {filepath}')
-            current_part_number = self.download_status[streamer_id]['current_part_number']
-            while True:
-              if streamer_id not in self.streamlink_plugins: # streamer_ids 에서 삭제 되었을 경우
-                stop_flag = True
-                break
-              if not self.download_status[streamer_id]['enable']: # 수동 정지
-                stop_flag = True
-                break
-              try:
-                target.write(opened_stream.read(chunk_size))
-                downloaded_bytes += chunk_size
-              except Exception as e: # opened_stream.closed 로 판별이 안됨. 
-                logger.error(f'{e}')
-                logger.debug(f'streamlink cannot read chunk OR sjva cannot write birnay file')
-                stop_flag = True
-                break
-              current_time_for_status = time()
-              current_bytes_for_status = downloaded_bytes
-              if current_time_for_status - before_time_for_status > update_interval:
-                time_diff = current_time_for_status - before_time_for_status
-                byte_diff = current_bytes_for_status - before_bytes_for_status
-                speed = self._get_speed_from_time(time_diff, byte_diff)
-                self._set_download_status(streamer_id, {
-                  'size': downloaded_bytes,
-                  'elapsed_time': self._get_timestr_from_seconds(time() - started_time),
-                  'speed': speed,
-                })
-                ModelTwitchItem.update(self.download_status[streamer_id])
-                before_time_for_status = current_time_for_status
-                before_bytes_for_status = current_bytes_for_status
-              if downloaded_bytes > (current_part_number * size_limit):
-                break
-            target.close()
-      else:
-        filepath = self._get_filepath(streamer_id)
-        with open(filepath, 'wb') as target:
-          ModelTwitchItem.update(self.download_status[streamer_id])
-          logger.debug(f'Write file: {filepath}')
-          while True:
-            if streamer_id not in self.streamlink_plugins:
-              break
-            if not self.download_status[streamer_id]['enable']:
-              break
-            try:
-              target.write(opened_stream.read(chunk_size))
-              downloaded_bytes += chunk_size
-            except Exception as e:
-              logger.error(f'{e}')
-              logger.debug(f'streamlink cannot read chunk OR sjva cannot write birnay file')
-              break
-            current_time_for_status = time()
-            current_bytes_for_status = downloaded_bytes
-            if current_time_for_status - before_time_for_status > update_interval:
-              time_diff = current_time_for_status - before_time_for_status
-              byte_diff = current_bytes_for_status - before_bytes_for_status
-              speed = self._get_speed_from_time(time_diff, byte_diff)
-              self._set_download_status(streamer_id, {
-                'size': downloaded_bytes,
-                'elapsed_time': self._get_timestr_from_seconds(time() - started_time),
-                'speed': speed,
-              })
-              ModelTwitchItem.update(self.download_status[streamer_id])
-              before_time_for_status = current_time_for_status
-              before_bytes_for_status = current_bytes_for_status
-          target.close()
-    
-      opened_stream.close()
-      ModelTwitchItem.process_done(self.download_status[streamer_id])
-      if os.path.isfile(filepath) and os.path.getsize(filepath) < (512 * 1024): # delete last empty file when cancelled
-        shutil_task.remove(filepath)
-        self._set_download_status(streamer_id, {'download_filenames': self.download_status[streamer_id]['download_filenames'][:-1]})
-        if len(self.download_status[streamer_id]['download_filenames']) == 0:
-          ModelTwitchItem.delete_by_id(self.download_status[streamer_id]['db_id'])
-      self._clear_properties(streamer_id)
-      logger.debug(f'{streamer_id} stream ends.')
-      if streamer_id not in [id for id in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not id.startswith('#')]:
-        # streamer_ids 업데이트 되어서 삭제 해야할 때
-        del self.streamlink_plugins[streamer_id]
-        del self.download_status[streamer_id]
-    except Exception as e:
-      logger.error(f'{e}')
-      logger.error(traceback.format_exc())
-      self._failed_thread_handler(streamer_id)
-  # _download_thread_function ends
-
-
-  def _get_speed_from_time(self, time_diff, byte_diff):
-    return self._unit_from_byte(byte_diff/time_diff) + '/s'
-
-
-  def _get_timestr_from_seconds(self, seconds):
-    result = ''
-    days = seconds // (24*60*60)
-    seconds = seconds % (24*60*60)
-    hours = seconds // (60*60)
-    seconds = seconds % (60*60)
-    minutes = seconds // 60
-    seconds = seconds % 60
-    if days:
-      result += f'{int(days)}d '
-    if hours:
-      result += f'{int(hours)}h '
-    if minutes:
-      result += f'{int(minutes)}m '
-    result += f'{int(seconds)}s'
-    return result
-
-
-  def _get_filename(self, streamer_id):
-    '''
-    update current_part_number, 'download_filenames'
-    returns next_{filename}.mp4 
-    '''
-    do_split = self.download_status[streamer_id]['do_split']
-    filename_format = self.download_status[streamer_id]['filename_format']
-    is_audio = self.download_status[streamer_id]['quality'] == 'audio_only'
-    next_part_number = self.download_status[streamer_id]['current_part_number'] + 1
-    if do_split:
-      self._set_download_status(streamer_id, {'current_part_number': next_part_number})
-      if not '{part_number}' in filename_format: # filename_format 에 {part_number} 가 없을 때
-        filename_format = filename_format + ' part{part_number}'
-        self._set_download_status(streamer_id, {'filename_format': filename_format})
-      filename = filename_format.replace('{part_number}', str(next_part_number))
+    self.prepare_download(streamer_id)
+    url = self.download_status[streamer_id]['url']
+    filename = self.download_status[streamer_id]['filename']
+    save_path = self.download_status[streamer_id]['save_path']
+    quality = self.download_status[streamer_id]['quality']
+    use_segment = P.ModelSetting.get_bool('twitch_file_use_segment')
+    segment_size = P.ModelSetting.get_int('twitch_file_segment_size')
+    if P.ModelSetting.get_bool('twitch_use_ffmpeg'):
+      self.downloader[streamer_id] = FfmpegTwitchDownloader(external_listener, url, filename, save_path, quality, use_segment, segment_size)
     else:
-      filename = filename_format.replace('{part_number}', '')
-    filename = self._replace_unavailable_characters_in_filename(filename)
-    if is_audio:
-      filename = filename + '.mp3'
-    else:
-      filename = filename + '.mp4'
-    self._set_download_status(streamer_id, {'download_filenames': self.download_status[streamer_id]['download_filenames'] + [filename]})
-    return filename
+      opened_stream = self.get_streams(streamer_id)[quality].open()
+      self.downloader[streamer_id] = StreamlinkTwitchDownloader(external_listener, url, filename, save_path, quality, use_segment, segment_size, opened_stream)
+    self.downloader[streamer_id].start()
 
 
-  def _get_filepath(self, streamer_id):
-    '''
-    raise exception if path already exists
-
-    returns {download_directory} + {filename}  
-    '''
-    download_directory = self.download_status[streamer_id]['download_directory']
-    filename = self._get_filename(streamer_id)
-    filepath = os.path.join(download_directory, filename)
-    if os.path.exists(filepath):
-      self._clear_properties(streamer_id)
-      raise Exception(f'[{streamer_id}] Failed! {filepath} already exists!')
-    return filepath
-
-
-  def _unit_from_byte(self, byte: int or float):
-    '''
-    returns '23 MB'
-    '''
-    count = 0
-    byte = float(byte)
-    while byte > 1024:
-      byte = byte/1024
-      count += 1
-    byte = round(byte, 1)
-    byte = str(byte)
-    if count == 0:
-      byte += ' B'
-    elif count == 1:
-      byte += ' KB'
-    elif count == 2:
-      byte += ' MB'
-    elif count == 3:
-      byte += ' GB'
-    elif count == 4:
-      byte += ' TB'
-    return byte
-
-
-  def _byte_from_unit(self, units: str):
-    '''
-    units: '2.8 MB', '4.0KB', ...
-    '''
-    value = float(re.findall(r"\d*\.\d+|\d+", units)[0])
-    if 'T' in units:
-      value = value * 1024 * 1024 * 1024 * 1024
-    elif 'G' in units:
-      value = value * 1024 * 1024 * 1024
-    elif 'M' in units:
-      value = value * 1024 * 1024
-    elif 'K' in units:
-      value = value * 1024
-    return value
-
-
-  def _replace_unavailable_characters_in_filename(self, source):
+  def replace_unavailable_characters_in_filename(self, source):
     replace_list = {
       ':': '∶',
       '/': '-',
@@ -670,9 +457,9 @@ class LogicTwitch(LogicModuleBase):
     return source
 
 
-  def _parse_string_from_format(self, streamer_id, format_str):
+  def parse_string_from_format(self, streamer_id, format_str):
     '''
-    keywords: {author}, {title}, {category}, {streamer_id}
+    keywords: {author}, {title}, {category}, {streamer_id}, {quality}
     and time foramt keywords: %m,%d,%Y, %H,%M,%S, ...
     https://docs.python.org/ko/3/library/datetime.html#strftime-and-strptime-format-codes
     '''
@@ -681,11 +468,13 @@ class LogicTwitch(LogicModuleBase):
     result = result.replace('{author}', self.download_status[streamer_id]['author'])
     result = result.replace('{title}', self.download_status[streamer_id]['title'])
     result = result.replace('{category}', self.download_status[streamer_id]['category'])
+    result = result.replace('{quality}', self.download_status[streamer_id]['quality'])
     result = datetime.now().strftime(result)
+    result = self.replace_unavailable_characters_in_filename(result)
     return result
 
 
-  def _set_download_status(self, streamer_id, values: dict):
+  def set_download_status(self, streamer_id, values: dict):
     '''
     set download_status and 
     send socketio_callback('status')
@@ -694,40 +483,24 @@ class LogicTwitch(LogicModuleBase):
       self.download_status[streamer_id] = {}
     for key in values:
       self.download_status[streamer_id][key] = values[key]
-    self.socketio_callback('update', self._get_download_status_for_javascript(streamer_id))
-
-
-  def _get_download_status_for_javascript(self, streamer_id=None):
-    '''
-    if streamer_id specified, it returns one object
-
-    returns time-converted status 
-    '''
-    if streamer_id is not None:
-      import copy
-      status_streamer_id = copy.deepcopy(self.download_status[streamer_id])
-      started_time = status_streamer_id['started_time']
-      if started_time != 0:
-        status_streamer_id['started_time'] = started_time.strftime('%Y-%m-%d %H:%M')
-      return {'streamer_id': streamer_id, 'status': status_streamer_id}
-    else:
-      return {
-        id:self._get_download_status_for_javascript(id)['status'] for id in self.download_status
-      }
+    self.socketio_callback('update', self.download_status[streamer_id])
 
   
-  def _clear_properties(self, streamer_id):
+  def clear_properties(self, streamer_id):
     '''
     set None to streamlink_plugins[streamer_id]
     clear download_status[streamer_id] 
     '''
+    if streamer_id in self.downloader:
+      self.downloader[streamer_id].stop()
+      del self.downloader[streamer_id]
     if streamer_id in self.streamlink_plugins:
       del self.streamlink_plugins[streamer_id]
     self.streamlink_plugins[streamer_id] = None
-    self._clear_download_status(streamer_id)
+    self.clear_download_status(streamer_id)
     
 
-  def _clear_download_status(self, streamer_id):
+  def clear_download_status(self, streamer_id):
     enable_value = True
     if streamer_id in self.download_status:
       enable_value = self.download_status[streamer_id]['enable']
@@ -739,21 +512,32 @@ class LogicTwitch(LogicModuleBase):
       'author': 'No Author',
       'title': 'No Title',
       'category': 'No Category',
-      'started_time': 0,
-      'quality': 'No Quality',
-      'download_directory': '',
-      'download_filenames': [],
-      'filename_format': '',
-      'do_split': P.ModelSetting.get_bool('twitch_file_split_by_size'),
-      'size_limit': P.ModelSetting.get('twitch_file_size_limit'),
-      'current_part_number': 0,
-      'size': 0,
-      'elapsed_time': 'No time',
-      'speed': 'No Speed',
-      'streams': {},
-      'options': [],
+      'url': '',
+      'filepath': '',
+      'filename': '',
+      'save_path': '',
+      'downloaded_files': [],
+      'quality': '',
+      'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
+      'segment_size': P.ModelSetting.get_int('twitch_file_segment_size'),
+      'status': 0,
+      'status_str': '',
+      'status_kor': '',
+      'current_bitrate': '',
+      'current_speed': '',
+      'elapsed_time': '',
+      'start_time': '',
+      'end_time': '',
+      'download_time': '',
+      'filesize': 0,
+      'filesize_str': '',
+      'download_speed': '',
     }
-    self._set_download_status(streamer_id, default_values)
+    self.set_download_status(streamer_id, default_values)
+
+#########################################################
+# streamlink class
+#########################################################
 
 
 #########################################################
@@ -815,6 +599,7 @@ class TwitchDownloader():
       self.status = Status.USER_STOP
       self.stop = True
       self.kill()
+      self.thread.join()
     except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
@@ -827,11 +612,7 @@ class TwitchDownloader():
         for proc in process.children(recursive=True):
           proc.kill()
         process.kill()
-      self.send_to_listener(**{
-        'type': 'status',
-        'status': -1, # killed
-        'data': self.get_data()
-      })
+      self.send_data_to_listener()
     except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
@@ -875,8 +656,8 @@ class TwitchDownloader():
       data['download_speed'] = Util.sizeof_fmt(self.filesize/self.download_time.seconds, suffix='Bytes/Second')
     return data
   
-  def send_to_listener(self, **arg):
-    self.external_listener(**arg)
+  def send_data_to_listener(self):
+    self.external_listener(self.get_data())
   
   def thread_function(self):
     pass
@@ -933,11 +714,7 @@ class StreamlinkTwitchDownloader(TwitchDownloader):
                 before_time_for_speed = datetime.now()
                 before_bytes_for_speed = self.filesize
                 self.current_speed = self.get_speed_from_diff(time_diff_seconds, byte_diff)
-                self.send_to_listener(**{
-                  'type': 'status',
-                  'status': self.status,
-                  'data': self.get_data()
-                })
+                self.send_data_to_listener()
               if self.elapsed_time_seconds / 60 > (part_number * self.segment_size):
                 break
             target.close()
@@ -965,11 +742,7 @@ class StreamlinkTwitchDownloader(TwitchDownloader):
               before_time_for_speed = datetime.now()
               before_bytes_for_speed = self.filesize
               self.current_speed = self.get_speed_from_diff(time_diff_seconds, byte_diff)
-              self.send_to_listener(**{
-                'type': 'status',
-                'status': self.status,
-                'data': self.get_data()
-              })
+              self.send_data_to_listener()
           target.close()
       
       self.streamlink_stream.close()
@@ -979,11 +752,7 @@ class StreamlinkTwitchDownloader(TwitchDownloader):
         if os.path.isfile(last_filepath) and os.path.getsize(last_filepath) < (512 * 1024):
           shutil_task.remove(last_filepath)
           self.downloaded_files = self.downloaded_files[:-1]
-          self.send_to_listener(**{
-            'type': 'status',
-            'status': self.status,
-            'data': self.get_data()
-          })
+          self.send_data_to_listener()
     except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
@@ -1056,22 +825,13 @@ class FfmpegTwitchDownloader(TwitchDownloader):
               self.duration += int(match.group(1)) * 100 * 60 * 60
               if match:
                 self.status = Status.READY
-                arg = {'type':'status_change', 'status':self.status, 'data' : self.get_data()}
-                self.send_to_listener(**{
-                  'type': 'status',
-                  'status': self.status,
-                  'data': self.get_data()
-                })
+                self.send_data_to_listener()
               continue
             # 다운로드 첫 시작 지점
             match = re.compile(r'time\=(\d{2})\:(\d{2})\:(\d{2})\.(\d{2})\sbitrate\=\s*(?P<bitrate>\d+).*?[$|\s](\s?speed\=\s*(?P<speed>.*?)x)?').search(line)
             if match:
               self.status = Status.DOWNLOADING
-              self.send_to_listener(**{
-                'type': 'status',
-                'status': self.status,
-                'data': self.get_data()
-              })
+              self.send_data_to_listener()
           elif self.status == Status.DOWNLOADING:
             if line.find('HTTP error 403 Forbidden') != -1:
               self.status = Status.HTTP_FORBIDDEN
@@ -1090,11 +850,7 @@ class FfmpegTwitchDownloader(TwitchDownloader):
               self.current_bitrate = match.group('bitrate')
               self.current_speed = match.group('speed')
               self.download_time = datetime.now() - self.start_time
-              self.send_to_listener(**{
-                'type': 'status',
-                'status': self.status,
-                'data': self.get_data()
-              })
+              self.send_data_to_listener()
               continue
             # m3u8 끝날 때 직접 확인하기
             match = re.compile(r'video\:\d*kB\saudio\:\d*kB').search(line)
@@ -1102,11 +858,7 @@ class FfmpegTwitchDownloader(TwitchDownloader):
               self.status = Status.COMPLETED
               self.end_time = datetime.now()
               self.download_time = self.end_time - self.start_time
-              self.send_to_listener(**{
-                'type': 'status',
-                'status': self.status,
-                'data': self.get_data()
-              })
+              self.send_data_to_listener()
               continue
         except Exception as e:
           logger.error(f'Exception: {e}')
