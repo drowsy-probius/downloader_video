@@ -41,7 +41,7 @@ class LogicTwitch(LogicModuleBase):
     'twitch_auto_make_folder': 'True',
     'twitch_auto_start': 'False',
     'twitch_interval': '2',
-    'streamlink_quality': '1080p60,best',
+    'twitch_quality': '1080p60,best',
     'streamlink_twitch_disable_ads': 'True',
     'streamlink_twitch_disable_hosting': 'True',
     'streamlink_twitch_disable_reruns': 'True',
@@ -74,7 +74,7 @@ class LogicTwitch(LogicModuleBase):
     'filepath': str, // {part_number} 교체하기 전 경로
     'filename': str, // {part_number} 교체하기 전 이름
     'save_path': str, // 다운로드 디렉토리
-    'downloaded_files: [],
+    'save_files: [],
     'quality': str,
     'use_segment': bool,
     'segment_size': int,
@@ -259,7 +259,7 @@ class LogicTwitch(LogicModuleBase):
 
 
   def is_online(self, streamer_id):
-    return len(self._get_streams(streamer_id)) > 0
+    return len(self.get_streams(streamer_id)) > 0
 
 
   def get_title(self, streamer_id):
@@ -286,7 +286,7 @@ class LogicTwitch(LogicModuleBase):
   def get_quality(self, streamer_id):
     quality = ''
     available_streams = self.get_streams(streamer_id)
-    quality_options = [i.strip() for i in P.ModelSetting.get('streamlink_quality').split(',')]
+    quality_options = [i.strip() for i in P.ModelSetting.get('twitch_quality').split(',')]
     for candidate_quality in quality_options:
       if candidate_quality in available_streams:
         quality = candidate_quality
@@ -298,7 +298,7 @@ class LogicTwitch(LogicModuleBase):
         if available_streams[q].url == available_streams[quality].url and q != quality:
           quality = q
           break
-    return qaulity
+    return quality
   
 
   def get_url(self, streamer_id):
@@ -324,17 +324,6 @@ class LogicTwitch(LogicModuleBase):
       ('hls-live-edge', streamlink_hls_live_edge),
     ]
     return options
-
-
-  def get_options_string(self):
-    result = ''
-    options = self.get_options()
-    for tup in options:
-      if len(tup) == 2:
-        result += tup[0] + ' ' + str(tup[1]) + '\n'
-      else:
-        result += tup[0] + ' ' + tup[1] + ' ' + str(tup[2]) + '\n'
-    return result
 
 
   def set_streamlink_options(self):
@@ -375,8 +364,7 @@ class LogicTwitch(LogicModuleBase):
     return self.download_status[streamer_id]['online'] and \
       type(self.download_status[streamer_id]['author']) == str and \
       type(self.download_status[streamer_id]['title']) == str and \
-      type(self.download_status[streamer_id]['category']) == str and \
-      self.download_status[streamer_id]['chunk_size'] > 0
+      type(self.download_status[streamer_id]['category']) == str
 
 
 
@@ -409,9 +397,8 @@ class LogicTwitch(LogicModuleBase):
     
     self.set_save_path(streamer_id)
     filename_format = self.parse_string_from_format(streamer_id, download_filename_format)
-    
-    db_id = ModelTwitchItem.append(streamer_id, self.download_status[streamer_id])
-    ModelTwitchItem.set_option_value(db_id, self.get_options_string())
+
+    db_id = ModelTwitchItem.insert(streamer_id, self.download_status[streamer_id])
 
     init_values2 = {
       'db_id': db_id,
@@ -516,7 +503,7 @@ class LogicTwitch(LogicModuleBase):
       'filepath': '',
       'filename': '',
       'save_path': '',
-      'downloaded_files': [],
+      'save_files': [],
       'quality': '',
       'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
       'segment_size': P.ModelSetting.get_int('twitch_file_segment_size'),
@@ -558,7 +545,7 @@ class TwitchDownloader():
   use_segment: 파일 분할 옵션
   segment_size: 분할 시간 (분)
   '''
-  from plugin.ffmpeg.logic import Status # ffmpeg 상관없이 상태 표시로 사용
+  from ffmpeg.logic import Status # ffmpeg 상관없이 상태 표시로 사용
   def __init__(self, 
     external_listener, url, filename, save_path, quality: str, 
     use_segment: bool, segment_size: int):
@@ -571,7 +558,7 @@ class TwitchDownloader():
     self.segment_size = segment_size
     self.file_extension = '.mp3' if self.quality == 'audio_only' else '.mp4'
     self.filepath = self.get_filepath()
-    self.downloaded_files = []
+    self.save_files = []
 
     self.thread = None
     self.process = None
@@ -636,7 +623,7 @@ class TwitchDownloader():
       'filepath': self.filepath,
       'filename': self.filename,
       'save_path': self.save_path,
-      'downloaded_files': self.downloaded_files,
+      'save_files': self.save_files,
       'quality': self.quality,
       'use_segment': self.use_segment,
       'segment_size': self.segment_size,
@@ -690,7 +677,7 @@ class StreamlinkTwitchDownloader(TwitchDownloader):
         while True and (not stop_flag):
           filepath = self.filepath % part_number
           with open(filepath, 'wb') as target:
-            self.downloaded_files.append(filepath)
+            self.save_files.append(filepath)
             logger.debug(f'Download segment files: {filepath}')
             while True:
               if self.stop:
@@ -721,7 +708,7 @@ class StreamlinkTwitchDownloader(TwitchDownloader):
           part_number += 1
       else:
         with open(self.filepath, 'wb') as target:
-          self.downloaded_files.append(self.filepath)
+          self.save_files.append(self.filepath)
           logger.debug(f'Download single file: {self.filepath}')
           while True:
             if self.stop:
@@ -747,11 +734,11 @@ class StreamlinkTwitchDownloader(TwitchDownloader):
       
       self.streamlink_stream.close()
       del self.streamlink_stream
-      if len(self.downloaded_files) > 0: # 어떤 이유로 종료되었는데 쓰레기 파일은 존재할 때
-        last_filepath = self.downloaded_files[-1]
+      if len(self.save_files) > 0: # 어떤 이유로 종료되었는데 쓰레기 파일은 존재할 때
+        last_filepath = self.save_files[-1]
         if os.path.isfile(last_filepath) and os.path.getsize(last_filepath) < (512 * 1024):
           shutil_task.remove(last_filepath)
-          self.downloaded_files = self.downloaded_files[:-1]
+          self.save_files = self.save_files[:-1]
           self.send_data_to_listener()
     except Exception as e:
       logger.error(f'Exception: {e}')
@@ -762,8 +749,8 @@ class StreamlinkTwitchDownloader(TwitchDownloader):
 
 
 class FfmpegTwitchDownloader(TwitchDownloader):
-  from plugin.ffmpeg.logic import Status
-  from plugin.ffmpeg.model import ModelSEtting as ffmpegModelSetting
+  from ffmpeg.logic import Status
+  from ffmpeg.model import ModelSetting as ffmpegModelSetting
   def __init__(self, 
     external_listener, url, filename, save_path,
     quality:str, use_segment: bool, segment_size: int):
@@ -873,36 +860,34 @@ class FfmpegTwitchDownloader(TwitchDownloader):
 # db
 #########################################################
 class ModelTwitchItem(db.Model):
-  '''
-  파일 저장에 관한 정보
-  created_time(날짜, 시간),
-  streamer_id, author,
-  title(started), category(started),
-  download_path, 
-  file_size, # 실시간 업데이트
-  elapsed_time, # 실시간 업데이트
-  quality, options
-  '''
   __tablename__ = '{package_name}_twitch_item'.format(package_name=P.package_name)
   __table_args__ = {'mysql_collate': 'utf8_general_ci'}
   __bind_key__ = P.package_name
   id = db.Column(db.Integer, primary_key=True)
   created_time = db.Column(db.DateTime)
-  running = db.Column(db.Boolean)
+  running = db.Column(db.Boolean, default=False)
+  status = db.Column(db.Integer)
   streamer_id = db.Column(db.String)
   author = db.Column(db.String)
   title = db.Column(db.String)
   category = db.Column(db.String)
-  download_directory = db.Column(db.String)
-  download_filenames = db.Column(db.String)
-  file_size = db.Column(db.BigInteger)
-  elapsed_time = db.Column(db.String)
+  save_path = db.Column(db.String)
+  save_files = db.Column(db.String)
+  use_segment = db.Column(db.Boolean)
+  segment_size = db.Column(db.Integer)
+  filesize = db.Column(db.BigInteger)
+  filesize_str = db.Column(db.String)
+  download_time = db.Column(db.String)
+  download_speed = db.Column(db.String)
+  start_time = db.Column(db.DateTime)
+  end_time = db.Column(db.DateTime)
+  elapsed_time = db.Column(db.DateTime)
   quality = db.Column(db.String)
   options = db.Column(db.String)
 
 
   def __init__(self):
-    self.running = True
+    pass
 
   def __repr__(self):
     return repr(self.as_dict())
@@ -910,6 +895,9 @@ class ModelTwitchItem(db.Model):
   def as_dict(self):
     ret = {x.name: getattr(self, x.name) for x in self.__table__.columns}
     ret['created_time'] = self.created_time.strftime('%Y-%m-%d %H:%M')
+    ret['start_time'] = self.start_time.strftime('%Y-%m-%d %H:%M')
+    ret['end_time'] = self.end_time.strftime('%Y-%m-%d %H:%M')
+    ret['elapsed_time'] = self.elapsed_time.strftime('%Y-%m-%d %H:%M')
     return ret
 
   def save(self):
@@ -929,10 +917,10 @@ class ModelTwitchItem(db.Model):
   @classmethod
   def get_file_list_by_id(cls, id):
     item = cls.get_by_id(id)
-    filenames = item.download_filenames.split('\n')
+    filenames = item.save_files.split('\n')
     return {
-      "directory": item.download_directory,
-      "filenames": filenames,
+      "save_path": item.save_path,
+      "save_files": filenames,
     }
 
   @classmethod
@@ -987,7 +975,7 @@ class ModelTwitchItem(db.Model):
 
   @classmethod
   def plugin_load(cls):
-    items = db.session.query(cls).filter(cls.file_size < (512 * 1024)).all()
+    items = db.session.query(cls).filter(cls.filesize < (512 * 1024)).all()
     for item in items:
       file_list = cls.get_file_list_by_id(item.id)
       directory = file_list['directory']
@@ -1001,16 +989,16 @@ class ModelTwitchItem(db.Model):
     db.session.commit()
   
   @classmethod
-  def process_done(cls, single_download_status):
-    cls.update(single_download_status)
-    item = cls.get_by_id(single_download_status['db_id'])
+  def process_done(cls, download_status):
+    cls.update(download_status)
+    item = cls.get_by_id(download_status['db_id'])
     item.running = False
     item.save()
 
 
   @classmethod
   def delete_empty_items(cls):
-    db.session.query(cls).filter_by(file_size="No Size").delete()
+    db.session.query(cls).filter_by(filesize="No Size").delete()
     db.session.commit()
     return True
   
@@ -1021,32 +1009,35 @@ class ModelTwitchItem(db.Model):
 
 
   @classmethod
-  def append(cls, streamer_id, single_download_status):
+  def insert(cls, streamer_id, initial_values):
     item = ModelTwitchItem()
-    item.created_time = single_download_status['started_time']
     item.streamer_id = streamer_id
-    item.author = single_download_status['author']
-    item.title = single_download_status['title']
-    item.category = single_download_status['category']
-    item.download_directory = single_download_status['download_directory']
-    item.download_filenames = '\n'.join(single_download_status['download_filenames'])
-    item.file_size = single_download_status['size']
-    item.elapsed_time = single_download_status['elapsed_time']
-    item.quality = single_download_status['quality']
+    item.running = initial_values['running']
+    item.status = initial_values['status']
+    item.author = initial_values['author']
+    item.title = initial_values['title']
+    item.category = initial_values['category']
+    item.save_path = initial_values['save_path']
+    item.quality = initial_values['quality']
+    item.use_segment = initial_values['use_segment']
+    item.segment_size = initial_values['segment_size']
+    item.options = '\n'.join([' '.join(str(j) for j in i) for i in initial_values['options']])
     item.save()
     return item.id
 
+
   @classmethod
-  def update(cls, single_download_status):
-    item = cls.get_by_id(single_download_status['db_id'])
-    item.download_filenames = '\n'.join(single_download_status['download_filenames'])
-    item.quality = single_download_status['quality']
-    item.file_size = single_download_status['size']
-    item.elapsed_time = single_download_status['elapsed_time']
+  def update(cls, download_status):
+    item = cls.get_by_id(download_status['db_id'])
+    item.running = download_status['running']
+    item.status = download_status['status']
+    item.save_files = '\n'.join(download_status['save_files'])
+    item.filesize = download_status['filesize']
+    item.filesize_str = download_status['filesize_str']
+    item.download_time = download_status['download_time']
+    item.download_speed = download_status['donwload_speed']
+    item.start_time = download_status['start_time']
+    item.end_time = download_status['end_time']
+    item.elapsed_time = download_status['elapsed_time']
     item.save()
   
-  @classmethod
-  def set_option_value(cls, db_id, options):
-    item = cls.get_by_id(db_id)
-    item.options = options
-    item.save()

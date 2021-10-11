@@ -19,7 +19,7 @@
     {{ macros.info_text_and_buttons('is_streamlink_installed', 'steamlink 설치상태', [['streamlink_install_btn', '설치/업데이트']], value=arg['is_streamlink_installed'], desc=['python3 이상', '단순히 pip 명령만 보내나 컴파일이 필요한 모듈이 있어 설치가 실패할 수도 있습니다.', '이 경우는 각자 알아서 설치하시기 바랍니다.']) }}
     <div class="streamlink_dependency" >
       {{ macros.setting_checkbox('twitch_use_ffmpeg', 'ffmpeg 사용', value=arg['twitch_use_ffmpeg'], desc='다운로드 시에 ffmpeg를 사용합니다.') }}
-      {{ macros.setting_input_text('streamlink_quality', 'streamlink 화질', col='3', value=arg['streamlink_quality'], desc=['best, worst, audio_only 등', 'ex) 1080p60,best :1080p60이 있으면 그걸 다운하고 없으면 best를 선택함.']) }}
+      {{ macros.setting_input_text('twitch_quality', 'streamlink 화질', col='3', value=arg['twitch_quality'], desc=['best, worst, audio_only 등', 'ex) 1080p60,best :1080p60이 있으면 그걸 다운하고 없으면 best를 선택함.']) }}
       {{ macros.setting_input_text_and_buttons('twitch_download_path', '저장 폴더',[['select_twitch_download_btn', '경로 선택']], value=arg['twitch_download_path'], desc=['방송 스트림이 저장될 폴더입니다.', '남은 용량이 충분한지 확인하세요.']) }}
       {{ macros.setting_checkbox('twitch_auto_make_folder', '하위 폴더 생성', value=arg['twitch_auto_make_folder'], desc='스트리머 이름으로 폴더를 생성하고 폴더 안에 다운로드합니다.') }}
       <div id="twitch_auto_make_folder_div" class="collapse">
@@ -35,19 +35,19 @@
           'title과 category는 다운 시작할 시점 기준.',
           '파일 확장자는 넣지 마세요.',
         ]) }}
-      {{ macros.setting_checkbox('twitch_file_split_by_size', '파일 분할', value=arg['twitch_file_split_by_size'], desc=['각 파일의 최대 크기를 지정합니다.', '분할된 파일 사이 간에 끊김이 있을 수 있습니다.']) }}
-      <div id="twitch_file_split_by_size_div" class="collapse">
+      {{ macros.setting_checkbox('twitch_file_use_segment', '파일 분할', value=arg['twitch_file_use_segment'], desc=['각 파일의 최대 시간을 지정합니다.', '분할된 파일 사이 간에 끊김이 있을 수 있습니다.']) }}
+      <div id="twitch_file_use_segment_div" class="collapse">
         {{ macros.setting_input_text(
-          'twitch_file_size_limit', 
-          '기준 사이즈', 
-          value=arg['twitch_file_size_limit'], 
+          'twitch_file_segment_size', 
+          '기준 값', 
+          value=arg['twitch_file_segment_size'], 
           col=3,
           desc=[
-            '저장된 파일이 이 크기를 넘으면 새로 다운로드합니다.', 
+            '저장된 파일의 길이가 이 값을 넘으면 분할합니다..', 
             '파일 명 옵션 중 {part_number} 부분이 1부터 증가하며 저장됩니다.',
             '{part_number}를 지정하지 않으면 파일명 뒤에 part{part_number}를 붙입니다.',
-            '1080p60 기준으로 2 GB: 대략 34분',
-            '단위 GB, MB'
+            '1080p60 기준으로 34분: 대략 2GB',
+            '단위 분'
           ]) }}
       </div>
       {{ macros.setting_checkbox('streamlink_options', '상세 옵션 보이기', value='False', desc='') }}
@@ -151,7 +151,7 @@ const is_streamlink_installed = "{{ arg['is_streamlink_installed'] }}" === "Inst
 
 $(document).ready(function(){
   use_collapse('twitch_auto_make_folder');
-  use_collapse('twitch_file_split_by_size');
+  use_collapse('twitch_file_use_segment');
   use_collapse('streamlink_options');
   if(!is_streamlink_installed)
   {
@@ -173,8 +173,8 @@ $('#twitch_auto_make_folder').change(function() {
   use_collapse('twitch_auto_make_folder');
 }); 
 
-$('#twitch_file_split_by_size').change(()=>{
-  use_collapse('twitch_file_split_by_size');
+$('#twitch_file_use_segment').change(()=>{
+  use_collapse('twitch_file_use_segment');
 })
 
 $('#streamlink_options').change(()=>{
