@@ -345,14 +345,17 @@ class LogicTwitch(LogicModuleBase):
 
 
   def set_streamlink_session(self):
-    if self.streamlink_session is None:
-      self.streamlink_session = streamlink.Session()
-    options = self.get_options()
-    for option in options:
-      if len(option) == 2:
-        self.streamlink_session.set_option(option[0], option[1])
-      elif len(option) == 3:
-        self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
+    try:
+      if self.streamlink_session is None:
+        self.streamlink_session = streamlink.Session()
+      options = self.get_options()
+      for option in options:
+        if len(option) == 2:
+          self.streamlink_session.set_option(option[0], option[1])
+        elif len(option) == 3:
+          self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
+    except:
+      pass
 
 
   def set_save_path(self, streamer_id):
