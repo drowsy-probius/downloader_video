@@ -49,10 +49,6 @@ class LogicTwitch(LogicModuleBase):
   }
   is_streamlink_installed = False
   streamlink_session = None # for download
-  downloader = {}
-  '''
-  'streamer_id': streamlink.stream.HLSStream.read(size)
-  '''
   download_status = {}
   '''
   'streamer_id': {
@@ -124,7 +120,6 @@ class LogicTwitch(LogicModuleBase):
         return jsonify(result)
       elif sub == 'install':
         self.install_streamlink()
-        import streamlink
         self.is_streamlink_installed = True
         self.set_streamlink_session()
         return jsonify({})
@@ -171,8 +166,6 @@ class LogicTwitch(LogicModuleBase):
     for streamer_id in new_streamer_ids:
       # init status of added streamers
       self.clear_properties(streamer_id)
-    # set streamlink session options
-    self.set_streamlink_session()
 
 
   def scheduler_function(self):
@@ -180,8 +173,6 @@ class LogicTwitch(LogicModuleBase):
     라이브 체크 후 다운로드 요청
     '''
     try:
-      import streamlink
-
       streamer_ids = [id for id in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not id.startswith('#')]
       for streamer_id in streamer_ids:
         if not self.download_status[streamer_id]['enable']:
@@ -201,7 +192,6 @@ class LogicTwitch(LogicModuleBase):
 
   def plugin_load(self):
     try:
-      import streamlink
       self.is_streamlink_installed = True
       self.set_streamlink_session()
     except:
@@ -264,7 +254,10 @@ class LogicTwitch(LogicModuleBase):
     '''
     returns
     {'id': '44828369517', 'author': 'heavyRainism', 'category': 'The King of Fighters XV', 'title': '호우!'} 
+
+    매번 새로운 값을 가져오기 위해서 세션 새로 생성
     '''
+    import streamlink
     (streamlink_plugin_class, url) = streamlink.Streamlink().resolve_url(f'https://www.twitch.tv/{streamer_id}')
     streamlink_plugin = streamlink_plugin_class(url)
     return streamlink_plugin.get_metadata()
@@ -273,7 +266,11 @@ class LogicTwitch(LogicModuleBase):
   def get_streams(self, streamer_id):
     '''
     returns {qualities: urls} 
+    
+    옵션 값 유지하기 위해서 만들어진 세션 사용
     '''
+    if self.streamlink_session is None:
+      self.set_streamlink_session()
     (streamlink_plugin_class, url) = self.streamlink_session.resolve_url(f'https://www.twitch.tv/{streamer_id}')
     streamlink_plugin = streamlink_plugin_class(url)
     streams = streamlink_plugin.streams()
@@ -347,6 +344,7 @@ class LogicTwitch(LogicModuleBase):
   def set_streamlink_session(self):
     try:
       if self.streamlink_session is None:
+        import streamlink
         self.streamlink_session = streamlink.Session()
       options = self.get_options()
       for option in options:
@@ -355,7 +353,8 @@ class LogicTwitch(LogicModuleBase):
         elif len(option) == 3:
           self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
     except:
-      pass
+      logger.error(f'Exception: {e}')
+      logger.error(traceback.format_exc())
 
 
   def set_save_path(self, streamer_id):
@@ -426,9 +425,6 @@ class LogicTwitch(LogicModuleBase):
     '''
     clear download_status[streamer_id] 
     '''
-    if streamer_id in self.downloader:
-      self.downloader[streamer_id].stop()
-      del self.downloader[streamer_id]
     self.clear_download_status(streamer_id)
     
 
@@ -518,8 +514,8 @@ class LogicTwitch(LogicModuleBase):
       save_file_format = get_save_file_format(save_path, filename, file_extension, use_segment)
       save_files = []
 
-      current_bitrate = ''
-      current_speed = ''
+      current_bitrate = 0
+      current_speed = 0
       elapsed_time = 0
       start_time = datetime.now()
       end_time = None
