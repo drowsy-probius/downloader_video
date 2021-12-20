@@ -45,6 +45,8 @@ class LogicTwitch(LogicModuleBase):
     'twitch_auto_start': 'False',
     'twitch_interval': '2',
     'twitch_quality': '1080p60,best',
+    'twitch_wait_for_1080': 'True',
+    'twitch_wait_time': '60',
     'streamlink_twitch_disable_ads': 'True',
     'streamlink_twitch_disable_hosting': 'True',
     'streamlink_twitch_disable_reruns': 'True',
@@ -54,11 +56,6 @@ class LogicTwitch(LogicModuleBase):
     'streamlink_options': 'False', # html 토글 위한 쓰레기 값임.
   }
   is_streamlink_installed = False
-  streamlink_session = None
-  streamlink_plugins = {}
-  '''
-  'streamer_id': <StreamlinkTwitchPlugin> 
-  '''
   downloader = {}
   '''
   'streamer_id': <TwtichDownloader> 
@@ -111,14 +108,16 @@ class LogicTwitch(LogicModuleBase):
         job_id = f'{self.P.package_name}_{self.name}'
         arg['scheduler'] = str(scheduler.is_include(job_id))
         arg['is_running'] = str(scheduler.is_running(job_id))
-        arg['is_streamlink_installed'] = 'Installed' if self.is_streamlink_installed else 'Not installed'
+        arg['is_streamlink_installed'] = self.is_streamlink_installed
+        arg['streamlink_version'] = self.get_streamlink_version()
       return render_template(f'{P.package_name}_{self.name}_{sub}.html', arg=arg)
     return render_template('sample.html', title=f'404: {P.package_name} - {sub}')
 
 
   def process_ajax(self, sub, req):
     try:
-      if sub == 'entity_list': # status 초기화
+      if sub == 'entity_list': 
+        # GET /status
         return jsonify(self.download_status)
       elif sub == 'toggle':
         streamer_id = req.form['streamer_id']
@@ -133,10 +132,12 @@ class LogicTwitch(LogicModuleBase):
           self.set_download_status(streamer_id, {'enable': True})
         return jsonify(result)
       elif sub == 'install':
-        LogicTwitch._install_streamlink()
+        self.install_streamlink()
         self.is_streamlink_installed = True
+        import streamlink
         return jsonify({})
-      elif sub == 'web_list': # list 탭에서 요청
+      elif sub == 'web_list':
+        # GET /list
         database = ModelTwitchItem.web_list(req)
         database['streamer_ids'] = ModelTwitchItem.get_streamer_ids()
         return jsonify(database)
@@ -150,7 +151,7 @@ class LogicTwitch(LogicModuleBase):
         if is_running:
           return jsonify({'ret': False, 'msg': '다운로드 중인 항목입니다.'})
         
-        delete_file = req.form['delete_file'] == 'true'
+        delete_file = (req.form['delete_file'] == 'true')
         if delete_file:
           download_info = ModelTwitchItem.get_file_list_by_id(db_id)
           for filename in download_info['filenames']:
@@ -165,21 +166,21 @@ class LogicTwitch(LogicModuleBase):
 
 
   def setting_save_after(self):
-    if self.streamlink_session is None:
-      import streamlink
-      self.streamlink_session = streamlink.Streamlink()
-    streamer_ids = [id for id in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not id.startswith('#')]
-    before_streamer_ids = [id for id in self.streamlink_plugins]
-    old_streamer_ids = [id for id in before_streamer_ids if id not in streamer_ids]
-    new_streamer_ids = [id for id in streamer_ids if id not in before_streamer_ids]
+    streamer_ids = [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]
+    before_streamer_ids = [sid for sid in self.download_status]
+    old_streamer_ids = [sid for sid in before_streamer_ids if sid not in streamer_ids]
+    new_streamer_ids = [sid for sid in streamer_ids if sid not in before_streamer_ids]
     for streamer_id in old_streamer_ids: 
       if self.download_status[streamer_id]['running']:
+        # keep current session and disable it until reboot
         self.set_download_status(streamer_id, {'enable': False})
       else:
-        del self.streamlink_plugins[streamer_id]
         del self.download_status[streamer_id]
     for streamer_id in new_streamer_ids:
+      # init status of added streamers
       self.clear_properties(streamer_id)
+    # TODO: toss it TwitchDownload
+    # set streamlink session options
     self.set_streamlink_options()
 
 
@@ -189,10 +190,7 @@ class LogicTwitch(LogicModuleBase):
     status 갱신은 실제 다운로드 로직에서 
     '''
     try:
-      if self.streamlink_session is None:
-        import streamlink
-        self.streamlink_session = streamlink.Streamlink()
-        self.set_streamlink_options()
+      import streamlink
 
       streamer_ids = [id for id in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not id.startswith('#')]
       for streamer_id in streamer_ids:
@@ -200,9 +198,6 @@ class LogicTwitch(LogicModuleBase):
           continue
         if self.download_status[streamer_id]['running']:
           continue
-        if self.streamlink_plugins[streamer_id] is None:
-          url = 'https://www.twitch.tv/' + streamer_id
-          self.streamlink_plugins[streamer_id] = self.streamlink_session.resolve_url(url)
         if not self.is_online(streamer_id):
           continue
         self.set_download_status(streamer_id, {'running': True})
@@ -218,8 +213,6 @@ class LogicTwitch(LogicModuleBase):
     try:
       import streamlink
       self.is_streamlink_installed = True
-      self.streamlink_session = streamlink.Streamlink()
-      self.set_streamlink_options()
     except:
       return False
     if not os.path.isdir(P.ModelSetting.get('twitch_download_path')):
@@ -261,57 +254,83 @@ class LogicTwitch(LogicModuleBase):
       logger.error(traceback.format_exc())
 
 
+  def get_streamlink_version(self):
+    try:
+      return f'v{streamlink.__version__}'
+    except:
+      return 'Not installed'
+
+
   def is_online(self, streamer_id):
-    return len(self.get_streams(streamer_id)) > 0
+    '''
+    return True if stream exists and streaming author is not None
+    '''
+    return len(self.get_streams(streamer_id)) > 0 and self.get_metadata(streamer_id)['author'] is not None
 
 
-  def get_title(self, streamer_id):
-    return self.streamlink_plugins[streamer_id].get_title()
+  def get_metadata(self, streamer_id):
+    '''
+    returns
+    {'id': '44828369517', 'author': 'heavyRainism', 'category': 'The King of Fighters XV', 'title': '호우!'} 
+    '''
+    (streamlink_plugin_class, url) = streamlink.Streamlink().resolve_url(f'https://www.twitch.tv/{streamer_id}')
+    streamlink_plugin = streamlink_plugin_class(url)
+    return streamlink_plugin.get_metadata()
 
-
-  def get_author(self, streamer_id):
-    return self.streamlink_plugins[streamer_id].get_author()
-
-
-  def get_category(self, streamer_id):
-    return self.streamlink_plugins[streamer_id].get_category()
-  
 
   def get_streams(self, streamer_id):
-    return self.streamlink_plugins[streamer_id].streams()
-  
-
-  def get_streams_url_dict(self, streamer_id):
-    streams = self.get_streams(streamer_id)
+    '''
+    returns {qualities: urls} 
+    '''
+    streams = streamlink.streams(f'https://www.twitch.tv/{streamer_id}')
     return {q:streams[q].url for q in streams}
 
 
-  def get_quality(self, streamer_id):
-    quality = ''
-    available_streams = self.get_streams(streamer_id)
-    quality_options = [i.strip() for i in P.ModelSetting.get('twitch_quality').split(',')]
-    for candidate_quality in quality_options:
-      if candidate_quality in available_streams:
-        quality = candidate_quality
-        break
-    if quality == '':
-      raise Exception(f'No available streams for qualities: {quality_options}')
-    if quality in ['best', 'worst']: # mostly convert best -> 1080p60, worst -> 160p
-      for q in available_streams:
-        if available_streams[q].url == available_streams[quality].url and q != quality:
-          quality = q
-          break
-    return quality
-  
+  def select_stream(self, streamer_id):
+    '''
+    returns (quality, m3u8) 
+    '''
+    result_quality = ''
+    result_m3u8 = ''
 
-  def get_url(self, streamer_id):
-    quality = self.get_quality(streamer_id)
-    return self.get_streams(streamer_id)[quality].url
+    quality_options = [i.strip() for i in P.ModelSetting.get('twitch_quality').split(',')]
+    wait_for_1080 = P.ModelSetting.get_bool('twitch_wait_for_1080')
+    wait_time = P.ModelSetting.get_int('twitch_wait_time')
+
+    streams = self.get_streams()
+    if wait_for_1080 and quality_options[0].startswith('best') or quality_options[0].startswith('1080'):
+      # TODO: comment below line
+      logger.debug(f'[{streamer_id}] waiting for 1080p60 stream.')
+      import time
+      elapsed_time = 0
+      while elapsed_time < wait_time:
+        for quality in streams:
+          if quality.startswith('1080'):
+            break
+        time.sleep(10)
+        elapsed_time = elapsed_time + 10
+        streams = self.get_streams()
+    
+    for quality in quality_options:
+      if quality in streams:
+        result_quality = quality
+        result_m3u8 = streams[qualty]
+        break
+    
+    if len(result_quality) == 0 or len(result_m3u8) == 0:
+      raise Exception(f'No available streams for {streamer_id} with {quality_options}')
+    
+    if result_quality in ['best', 'worst']: # convert best -> 1080p60, worst -> 160p
+      for quality in streams:
+        if result_m3u8 == streams[quality] and result_quality != quality:
+          result_quality = quality
+          break
+    return (result_quality, result_m3u8)
 
 
   def get_options(self):
     '''
-    from P.Modelsetting produces list for options list
+    returns [(option1), (option2), ...]
     '''
     options = []
     streamlink_twitch_disable_ads = P.ModelSetting.get_bool('streamlink_twitch_disable_ads')
@@ -329,19 +348,21 @@ class LogicTwitch(LogicModuleBase):
     return options
 
 
-  def set_streamlink_options(self):
+  def set_streamlink_options(self, streamer_id):
+    # TODO: streamer_id에 맞게 적용하기
     options = self.get_options()
     for option in options:
       if len(option) == 2:
-        self.streamlink_session.set_option(option[0], option[1])
+        pass
+        # self.streamlink_session.set_option(option[0], option[1])
       elif len(option) == 3:
-        self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
+        pass
+        # self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
 
 
   def set_save_path(self, streamer_id):
     ''' 
-    make save_path and
-    set 'save_path'
+    create download directory and set save_path attribute in self.download_status[streamer_id] 
     '''
     download_base_directory = P.ModelSetting.get('twitch_download_path')
     download_make_directory = P.ModelSetting.get_bool('twitch_auto_make_folder')
@@ -358,75 +379,40 @@ class LogicTwitch(LogicModuleBase):
     self.set_download_status(streamer_id, {'save_path': save_path})
 
 
-  def is_safe_to_start(self, streamer_id):
-    '''
-    check is online and
-    author, title, category is string, not None and
-    chunk_size > 0
-    '''
-    return self.download_status[streamer_id]['online'] and \
-      type(self.download_status[streamer_id]['author']) == str and \
-      type(self.download_status[streamer_id]['title']) == str and \
-      type(self.download_status[streamer_id]['category']) == str
-
-
-
-  def prepare_download(self, streamer_id):
-    quality = ''
-    filename_format = ''
-
-    download_filename_format = P.ModelSetting.get('twitch_filename_format')
-
-    try_index = 1
-    max_try = 5
-    while True:
-      init_values = {
-        'online': self.is_online(streamer_id),
-        'author': self.get_author(streamer_id),
-        'title': self.get_title(streamer_id),
-        'category': self.get_category(streamer_id),
-        'quality': self.get_quality(streamer_id),
-        'url': self.get_url(streamer_id),
-        'options': self.get_options(),
-      }
-      self.set_download_status(streamer_id, init_values)
-      if self.is_safe_to_start(streamer_id):
-        break
-      if try_index > max_try:
-        raise Exception(f'Cannot retrieve stream info: {streamer_id}')
-      import time
-      time.sleep(0.5)
-      try_index += 1
-    
-    self.set_save_path(streamer_id)
-    filename_format = self.parse_string_from_format(streamer_id, download_filename_format)
-
-    db_id = ModelTwitchItem.insert(streamer_id, self.download_status[streamer_id])
-
-    init_values2 = {
-      'db_id': db_id,
-      'filename': filename_format,
-    }
-    self.set_download_status(streamer_id, init_values2)
-  # prepare ends
-
 
   def download_thread_function(self, streamer_id):
     def external_listener(values):
       self.set_download_status(streamer_id, values)
 
-    self.prepare_download(streamer_id)
-    url = self.download_status[streamer_id]['url']
-    filename = self.download_status[streamer_id]['filename']
+    metadata = self.get_metadata(streamer_id)
+    (quality, m3u8) = self.select_stream(streamer_id)
+    self.set_download_status(streamer_id, {
+      'online': True,
+      'author': metadata['author'],
+      'title': metadata['title'],
+      'category': metadata['category'],
+      'quality': quality,
+      'url': m3u8,
+      'options': self.get_options()
+    })
+    # mkdir
+    self.set_save_path(streamer_id)
+    filename = self.parse_string_from_format(streamer_id, download_filename_format)
+    db_id = ModelTwitchItem.insert(streamer_id, self.download_status[streamer_id])
+    self.set_download_status(streamer_id, {
+      'db_id': db_id,
+      'filename': filename
+    })
+
     save_path = self.download_status[streamer_id]['save_path']
     quality = self.download_status[streamer_id]['quality']
     use_segment = P.ModelSetting.get_bool('twitch_file_use_segment')
     segment_size = P.ModelSetting.get_int('twitch_file_segment_size')
     if P.ModelSetting.get_bool('twitch_use_ffmpeg'):
-      self.downloader[streamer_id] = FfmpegTwitchDownloader(external_listener, url, filename, save_path, quality, use_segment, segment_size)
+      self.downloader[streamer_id] = FfmpegTwitchDownloader(external_listener, m3u8, filename, save_path, quality, use_segment, segment_size)
     else:
       opened_stream = self.get_streams(streamer_id)[quality].open()
-      self.downloader[streamer_id] = StreamlinkTwitchDownloader(external_listener, url, filename, save_path, quality, use_segment, segment_size, opened_stream)
+      self.downloader[streamer_id] = StreamlinkTwitchDownloader(external_listener, m3u8, filename, save_path, quality, use_segment, segment_size, opened_stream)
     self.downloader[streamer_id].start()
 
 
@@ -466,8 +452,7 @@ class LogicTwitch(LogicModuleBase):
 
   def set_download_status(self, streamer_id, values: dict):
     '''
-    set download_status and 
-    send socketio_callback('status')
+    set download_status and send socketio_callback('update')
     '''
     if streamer_id not in self.download_status:
       self.download_status[streamer_id] = {}
@@ -478,15 +463,11 @@ class LogicTwitch(LogicModuleBase):
   
   def clear_properties(self, streamer_id):
     '''
-    set None to streamlink_plugins[streamer_id]
     clear download_status[streamer_id] 
     '''
     if streamer_id in self.downloader:
       self.downloader[streamer_id].stop()
       del self.downloader[streamer_id]
-    if streamer_id in self.streamlink_plugins:
-      del self.streamlink_plugins[streamer_id]
-    self.streamlink_plugins[streamer_id] = None
     self.clear_download_status(streamer_id)
     
 
