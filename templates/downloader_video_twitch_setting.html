@@ -79,7 +79,7 @@
             '단위 분'
           ]) }}
       </div>
-      {{ macros.setting_checkbox('streamlink_options', 'streamlink 상세 옵션 보이기', value='False', desc='ffmpeg 사용 시에는 테스트 해보지 않음.') }}
+      {{ macros.setting_checkbox('streamlink_options', 'streamlink 상세 옵션 보이기', value='False', desc='') }}
       <div id="streamlink_options_div" class="collapse">
         {{ macros.setting_input_int('streamlink_hls_live_edge', '--hls_live_edge', value=arg['streamlink_hls_live_edge'], min=1, max=3) }}
         {{ macros.setting_checkbox('streamlink_twitch_disable_ads', '--twitch-disable-ads', value=arg['streamlink_twitch_disable_ads']) }}
