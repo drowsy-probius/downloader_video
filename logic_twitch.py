@@ -164,7 +164,6 @@ class LogicTwitch(LogicModuleBase):
       else:
         del self.download_status[streamer_id]
     for streamer_id in new_streamer_ids:
-      # init status of added streamers
       self.clear_properties(streamer_id)
 
 
@@ -194,8 +193,10 @@ class LogicTwitch(LogicModuleBase):
     try:
       self.is_streamlink_installed = True
       self.set_streamlink_session()
-    except:
-      return False
+    except Exception as e:
+      logger.error(f'Exception: {e}')
+      logger.error(traceback.format_exc())
+
     if not os.path.isdir(P.ModelSetting.get('twitch_download_path')):
       os.makedirs(P.ModelSetting.get('twitch_download_path'), exist_ok=True) # mkdir -p
     ModelTwitchItem.plugin_load()
@@ -288,27 +289,30 @@ class LogicTwitch(LogicModuleBase):
     wait_for_1080 = P.ModelSetting.get_bool('twitch_wait_for_1080')
     wait_time = P.ModelSetting.get_int('twitch_wait_time')
 
-    streams = self.get_streams()
+    streams = self.get_streams(streamer_id)
     if wait_for_1080 and quality_options[0].startswith('best') or quality_options[0].startswith('1080'):
-      # TODO: comment below line
-      logger.debug(f'[{streamer_id}] waiting for 1080p60 stream.')
       import time
       elapsed_time = 0
+      quality_exists = False
       while elapsed_time < wait_time:
         for quality in streams:
           if quality.startswith('1080'):
+            quality_exists = True
             break
+        if quality_exists:
+          break
+        logger.debug(f'[{streamer_id}] waiting for 1080p60 stream.')
         time.sleep(10)
         elapsed_time = elapsed_time + 10
-        streams = self.get_streams()
+        streams = self.get_streams(streamer_id)
     
     for quality in quality_options:
       if quality in streams:
         result_quality = quality
-        result_stream = streams[qualty]
+        result_stream = streams[quality]
         break
     
-    if len(result_quality) == 0 or len(result_m3u8) == 0:
+    if len(result_quality) == 0:
       raise Exception(f'No available streams for {streamer_id} with {quality_options}')
     
     if result_quality in ['best', 'worst']: # convert best -> 1080p60, worst -> 160p
@@ -337,7 +341,7 @@ class LogicTwitch(LogicModuleBase):
       ('hls-live-edge', streamlink_hls_live_edge),
     ]
     if toString:
-      return '\n'.join([' '.join(i) for i in options])
+      return '\n'.join([' '.join([str(j) for j in i]) for i in options])
     return options
 
 
@@ -345,7 +349,7 @@ class LogicTwitch(LogicModuleBase):
     try:
       if self.streamlink_session is None:
         import streamlink
-        self.streamlink_session = streamlink.Session()
+        self.streamlink_session = streamlink.Streamlink()
       options = self.get_options()
       for option in options:
         if len(option) == 2:
@@ -414,19 +418,23 @@ class LogicTwitch(LogicModuleBase):
     '''
     set download_status and send socketio_callback('update')
     '''
-    if streamer_id not in self.download_status:
-      self.download_status[streamer_id] = {}
-    for key in values:
-      self.download_status[streamer_id][key] = values[key]
-    self.socketio_callback('update', self.download_status[streamer_id])
-
+    try:
+      if streamer_id not in self.download_status:
+        self.download_status[streamer_id] = {}
+      for key in values:
+        self.download_status[streamer_id][key] = values[key]
+      self.socketio_callback('update', self.download_status[streamer_id])
+    except Exception as e:
+      logger.error('Exception:%s', e)
+      logger.error(traceback.format_exc())
   
+
   def clear_properties(self, streamer_id):
     '''
     clear download_status[streamer_id] 
     '''
     self.clear_download_status(streamer_id)
-    
+
 
   def clear_download_status(self, streamer_id):
     enable_value = True
@@ -467,6 +475,7 @@ class LogicTwitch(LogicModuleBase):
     (quality, stream) = self.select_stream(streamer_id)
     self.set_download_status(streamer_id, {
       'online': True,
+      'manual_stop': False,
       'author': metadata['author'],
       'title': metadata['title'],
       'category': metadata['category'],
@@ -478,9 +487,9 @@ class LogicTwitch(LogicModuleBase):
     })
     # mkdir
     self.set_save_path(streamer_id)
-    filepath = P.ModelSetting.get(twitch_directory_name_format)
+    filepath = self.download_status[streamer_id]['filepath']
     save_path = self.parse_string_from_format(streamer_id, filepath)
-    filename = self.parse_string_from_format(streamer_id, P.ModelSetting.get(twitch_filename_format))
+    filename = self.parse_string_from_format(streamer_id, self.download_status[streamer_id]['filename'])
     db_id = ModelTwitchItem.insert(streamer_id, self.download_status[streamer_id])
     self.set_download_status(streamer_id, {
       'db_id': db_id,
@@ -506,7 +515,7 @@ class LogicTwitch(LogicModuleBase):
         return save_file_format
           
       # set initial status values
-      file_extension = '.mp3' if self.quality == 'audio_only' else '.mp4'
+      file_extension = '.mp3' if self.download_status[streamer_id]['quality'] == 'audio_only' else '.mp4'
       filename = self.download_status[streamer_id]['filename']
       save_path = self.download_status[streamer_id]['save_path']
       use_segment = self.download_status[streamer_id]['use_segment']
@@ -525,11 +534,14 @@ class LogicTwitch(LogicModuleBase):
       download_speed = ''
 
       # 다운로드와 관련된 값 선언
-      chunk_size = 4096 * 1024 # 4k bytes
+      # chunk_size = 4096 * 1024 # 4k bytes
+      chunk_size = P.ModelSetting.get_int('streamlink_chunk_size') # 4k bytes
       status_update_interval = 3
 
       before_time_for_speed = datetime.now()
       before_bytes_for_speed = 0
+
+      logger.debug(save_file_format)
 
       if use_segment:
         part_number = 0
@@ -651,7 +663,7 @@ class ModelTwitchItem(db.Model):
   id = db.Column(db.Integer, primary_key=True)
   created_time = db.Column(db.DateTime)
   running = db.Column(db.Boolean, default=False)
-  status = db.Column(db.Integer)
+  manual_stop = db.Column(db.Boolean, default=False)
   streamer_id = db.Column(db.String)
   author = db.Column(db.String)
   title = db.Column(db.String)
@@ -798,7 +810,7 @@ class ModelTwitchItem(db.Model):
     item = ModelTwitchItem()
     item.streamer_id = streamer_id
     item.running = initial_values['running']
-    item.status = initial_values['status']
+    item.manual_stop = initial_values['manual_stop']
     item.author = initial_values['author']
     item.title = initial_values['title']
     item.category = initial_values['category']
@@ -806,7 +818,7 @@ class ModelTwitchItem(db.Model):
     item.quality = initial_values['quality']
     item.use_segment = initial_values['use_segment']
     item.segment_size = initial_values['segment_size']
-    item.options = '\n'.join([' '.join(str(j) for j in i) for i in initial_values['options']])
+    item.options = initial_values['options']
     item.save()
     return item.id
 
@@ -815,7 +827,7 @@ class ModelTwitchItem(db.Model):
   def update(cls, download_status):
     item = cls.get_by_id(download_status['db_id'])
     item.running = download_status['running']
-    item.status = download_status['status']
+    item.manual_stop = initial_values['manual_stop']
     item.save_files = '\n'.join(download_status['save_files'])
     item.filesize = download_status['filesize']
     item.filesize_str = download_status['filesize_str']

@@ -231,8 +231,8 @@ class LogicAni365(LogicModuleBase):
             logger.debug('get_json_with_auth_session status_code : %s', res.status_code)
             return res.json(), headers
         except Exception as exception: 
-            logger.error('Exception:%s', exception)
-            logger.error(traceback.format_exc())
+            # logger.error('Exception:%s', exception)
+            # logger.error(traceback.format_exc())
             return None, None
 
 

@@ -95,6 +95,7 @@ socket.on('start', function(data){
 });
 
 socket.on('update', function(data){
+  console.debug(`${data}`);
   streamlink_process_status[data.streamer_id] = data.status;
   render_update(data);
 });
@@ -207,8 +208,10 @@ function render_list(streamlink_process_status)
 
 function render_update(data)
 {
+  if(!data.streamer_id) return;
+
   const streamer_id = data.streamer_id;
-  const status = data.status;
+  const status = data.running;
 
   const status_div = document.getElementById(streamer_id);
   const div_streamer = document.getElementById(`${streamer_id}_streamer`)
