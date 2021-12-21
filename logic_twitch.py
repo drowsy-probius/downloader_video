@@ -137,10 +137,10 @@ class LogicTwitch(LogicModuleBase):
         
         delete_file = (req.form['delete_file'] == 'true')
         if delete_file:
-          download_info = ModelTwitchItem.get_file_list_by_id(db_id)
-          for filename in download_info['filenames']:
-            download_path = os.path.join(download_info['directory'], filename)
-            shutil_task.remove(download_path)
+          save_files = ModelTwitchItem.get_file_list_by_id(db_id)
+          for save_file in save_files:
+            if os.path.exists(save_file) and os.path.isfile(save_file):
+              shutil_task.remove(save_file)
         db_return = ModelTwitchItem.delete_by_id(db_id)
         return jsonify({'ret': db_return})
     except Exception as e:
@@ -156,7 +156,7 @@ class LogicTwitch(LogicModuleBase):
     new_streamer_ids = [sid for sid in streamer_ids if sid not in before_streamer_ids]
     for streamer_id in old_streamer_ids: 
       if self.download_status[streamer_id]['running']:
-        # keep current session and disable it until reboot
+        # keep current download session until reboot
         self.set_download_status(streamer_id, {'enable': False})
       else:
         del self.download_status[streamer_id]
@@ -244,9 +244,9 @@ class LogicTwitch(LogicModuleBase):
 
   def is_online(self, streamer_id):
     '''
-    return True if stream exists and streaming author is not None
+    return True if stream exists and streaming id is not None
     '''
-    return len(self.get_streams(streamer_id)) > 0 and self.get_metadata(streamer_id)['author'] is not None
+    return len(self.get_streams(streamer_id)) > 0 and self.get_metadata(streamer_id)['id'] is not None
 
 
   def get_metadata(self, streamer_id):
@@ -488,6 +488,7 @@ class LogicTwitch(LogicModuleBase):
       'db_id': db_id,
       'filename': filename,
     })
+
     self.download_stream(streamer_id, stream)
   
 
@@ -625,6 +626,7 @@ class LogicTwitch(LogicModuleBase):
             if elapsed_time / 60 > (part_number * segment_size):
               break
           target.close()
+      
       opened_stream.close()
       del opened_stream
       del stream 
@@ -653,6 +655,11 @@ class LogicTwitch(LogicModuleBase):
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
 
+
+  def download_strem_ffmpeg(self, streamer_id, save_name):
+    # https://github.com/streamlink/streamlink/discussions/3749
+    # streamlink -O URL QUALITY [--session_options] | ffmpeg -i pipe:0 -c:v copy -c:a copy -f matroska -y file.mkv
+    pass
 
 #########################################################
 # db
@@ -712,10 +719,7 @@ class ModelTwitchItem(db.Model):
   @classmethod
   def get_file_list_by_id(cls, id):
     item = cls.get_by_id(id)
-    filenames = item.save_files.split('\n')
-    return {
-      "save_files": filenames,
-    }
+    return item.save_files.split('\n')
 
   @classmethod
   def web_list(cls, req):
@@ -771,17 +775,15 @@ class ModelTwitchItem(db.Model):
   def plugin_load(cls):
     items = db.session.query(cls).filter(cls.filesize < (32 * 1024)).all()
     for item in items:
-      file_list = cls.get_file_list_by_id(item.id)
-      directory = file_list['directory']
-      filenames = file_list['filenames']
-      for filename in filenames:
-        filepath = os.path.join(directory, filename)
-        if os.path.exists(filepath) and os.path.isfile(filepath):
-          shutil_task.remove(filepath)
+      save_files = cls.get_file_list_by_id(item.id)
+      for save_file in save_files:
+        if os.path.exists(save_file) and os.path.isfile(save_file):
+          shutil_task.remove(save_file)
       cls.delete_by_id(item.id)
     db.session.query(cls).update({'running': False})
     db.session.commit()
   
+
   @classmethod
   def process_done(cls, download_status):
     cls.update(download_status)
