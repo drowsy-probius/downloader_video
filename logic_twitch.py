@@ -676,13 +676,22 @@ class LogicTwitch(LogicModuleBase):
     # 다운로드 중 log는 다음과 같음
     # frame=  360 fps= 62 q=-1.0 size=N/A time=00:00:05.99 bitrate=N/A speed=1.03x
     # segment 시작 부분은 [segment @ 0x559d4934d2c0] Opening 'output_000.mp4' for writing
-    from plugin.ffmpeg.model import ModelSetting as FfmpegModelSetting
+    from ffmpeg.model import ModelSetting as FfmpegModelSetting
     ffmpeg_path = FfmpegModelSetting.get('ffmpeg_path')
     url = f'https://www.twitch.tv/{streamer_id}'
     quality = self.download_status[streamer_id]['quality']
     use_segment = self.download_status[streamer_id]['use_segment']
     segment_size = self.download_status[streamer_id]['segment_size']
     audio_only = (quality == 'audio_only')
+    save_format = self.download_status[streamer_id]['save_format']
+
+    base_command = [app.config['config']['pip'], '-m', 'streamlink', '-O', url, quality, '|', ffmpeg_path, '-i', 'pipe:0',]
+    format_option = ['-acodec', 'mp3', '-ab', '129k'] if audio_only else ['-c:v', 'copy', '-c:a', 'copy']
+    segment_option = ['-f', 'segment', '-segment_time', segment_size*60, '-reset_timestamps', '1'] if use_segment else []
+    command = base_command + format_option + segment_option + [save_format]
+
+    logger.debug(command)
+
 
     self.clear_download_status(streamer_id)
 
