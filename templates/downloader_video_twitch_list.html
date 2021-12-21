@@ -73,9 +73,8 @@ $("body").on('click', '#json_btn', function(e){
   for (i in current_data.list) {
     if (current_data.list[i].id == id) {
       json_data = JSON.parse(JSON.stringify(current_data.list[i])) // deep copy
-      json_data.download_filenames = json_data.download_filenames.split('\n');
-      // json_data.file_size = formatBytes(json_data.file_size);
-      json_data.file_size = json_data.file_size;
+      json_data.save_files = json_data.save_files.split('\n');
+      json_data.filesize = json_data.filesize;
       json_data.options = json_data.options.split('\n'); 
       m_modal(json_data)
     }
@@ -137,19 +136,20 @@ function delete_btn_callback(data) {
   }
 }
 
-// https://stackoverflow.com/a/18650828
-function formatBytes(bytes, decimals = 1) {
-  if (bytes === 0) return '0 Bytes';
-
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+/*
+function time_format_string(elapsed_time)
+{
+  function pad(n, width)
+  {
+    n = n + '';
+    return n.length >= width ? n : new Array(width - n.length + 1).join('0') + n;
+  }
+  const hour = parseInt(elapsed_time/3600);
+  const minutes = parseInt(elapsed_time/60);
+  const seconds = parseInt(elapsed_time%60);
+  return `${pad(hour, 2)}:${pad(minutes, 2)}:${pad(seconds, 2)}`;
 }
-
+*/
 
 function make_list(data) {
   let str = '';
@@ -162,7 +162,7 @@ function make_list(data) {
     tmp = `${data[i].title}<br>${data[i].category}<br>화질: ${data[i].quality}`
     str += m_col(3, tmp)
 
-    tmp = `크기: ${formatBytes(data[i].file_size)}, 경과: ${data[i].elapsed_time} ${data[i].running ? '(다운로드 중)' : '(완료)'}`
+    tmp = `크기: ${data[i].filesize}, 경과: ${data[i].elapsed_time} ${data[i].running ? '(다운로드 중)' : '(완료)'}`
     const search_streamer_btn = m_button('search_streamer_btn', '스트리머검색', [{'key': 'streamer_id', 'value': data[i].streamer_id}]);
     const search_category_btn = m_button('search_category_btn', '카테고리검색', [{'key': 'category', 'value': data[i].category}]);
     const json_btn = m_button('json_btn', 'JSON', [{'key': 'db_id', 'value': data[i].id}]);

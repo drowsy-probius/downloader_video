@@ -27,6 +27,7 @@ ModelSetting = P.ModelSetting
 class LogicTwitch(LogicModuleBase):
   db_default = {
     'twitch_db_version': '1',
+    'twitch_use_ffmpeg': 'False',
     'twitch_download_path': os.path.join(path_data, P.package_name, 'twitch'),
     'twitch_filename_format': '[%Y-%m-%d %H:%M][{category}] {title} part{part_number}',
     'twitch_directory_name_format': '{author} ({streamer_id})/%y%m',
@@ -67,12 +68,10 @@ class LogicTwitch(LogicModuleBase):
     'quality': str,
     'use_segment': bool,
     'segment_size': int,
-    'current_bitrate': str,
     'current_speed': str,
-    'elapsed_time': datetime,
+    'elapsed_time': str,
     'start_time': str,
     'end_time': str,
-    'download_time': str,
     'filesize': int, // total size
     'download_speed': str, // average speed
   }
@@ -225,6 +224,7 @@ class LogicTwitch(LogicModuleBase):
           commands.append([app.config['config']['pip'], 'install', '--upgrade', 'pip'])
           commands.append([app.config['config']['pip'], 'install', '--upgrade', 'streamlink'])
         commands.append(['msg', u'설치가 완료되었습니다.'])
+        commands.append(['msg', u'재시작이 필요합니다.'])
         system.SystemLogicCommand.start('설치', commands)
       t = threading.Thread(target=func, args=())
       t.setDaemon(True)
@@ -354,7 +354,7 @@ class LogicTwitch(LogicModuleBase):
           self.streamlink_session.set_option(option[0], option[1])
         elif len(option) == 3:
           self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
-    except:
+    except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
 
@@ -421,6 +421,7 @@ class LogicTwitch(LogicModuleBase):
         self.download_status[streamer_id] = {}
       for key in values:
         self.download_status[streamer_id][key] = values[key]
+      ModelTwitchItem.update(self.download_status[streamer_id])
       self.socketio_callback('update', {'streamer_id': streamer_id, 'status': self.download_status[streamer_id]})
     except Exception as e:
       logger.error('Exception:%s', e)
@@ -454,12 +455,10 @@ class LogicTwitch(LogicModuleBase):
       'quality': '',
       'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
       'segment_size': P.ModelSetting.get_int('twitch_file_segment_size'),
-      'current_bitrate': '',
       'current_speed': '',
-      'elapsed_time': None,
+      'elapsed_time': '',
       'start_time': '',
       'end_time': '',
-      'download_time': '',
       'filesize': '',
       'download_speed': '',
     }
@@ -478,7 +477,7 @@ class LogicTwitch(LogicModuleBase):
       'quality': quality,
       'url': stream.url,
       'options': self.get_options(toString=True),
-      'use_segnemt': P.ModelSetting.get_bool('twitch_file_use_segment'),
+      'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
       'segment_size': P.ModelSetting.get_int('twitch_file_segment_size'),
     })
     # mkdir
@@ -498,8 +497,8 @@ class LogicTwitch(LogicModuleBase):
         save_file_format = ''
         filename = filename
         if use_segment:
-          if '{part_number}' not in filename:
-            filename.replace('{part_number}', '%02d')
+          if '{part_number}' in filename:
+            filename = filename.replace('{part_number}', '%02d')
           else:
             filename = filename + ' part%02d'
         filename = filename + ext
@@ -515,22 +514,29 @@ class LogicTwitch(LogicModuleBase):
       save_file_format = get_save_file_format(filepath, filename, file_extension, use_segment)
       save_files = []
 
-      current_bitrate = 0
       current_speed = 0
       elapsed_time = 0
       start_time = datetime.now()
       end_time = None
-      download_time = None 
       filesize = 0
       download_speed = ''
 
       # 다운로드와 관련된 값 선언
       # chunk_size = 4096 * 1024 # 4k bytes
-      chunk_size = P.ModelSetting.get_int('streamlink_chunk_size') # 4k bytes
+      chunk_size = P.ModelSetting.get_int('streamlink_chunk_size')
       status_update_interval = 3
 
       before_time_for_speed = datetime.now()
       before_bytes_for_speed = 0
+
+      self.set_download_status(streamer_id, {
+        'save_files': save_files,
+        'current_speed': current_speed,
+        'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, elapsed_time/60, elapsed_time%60),
+        'start_time': '' if start_time is None else str(start_time).split('.')[0][5:],
+        'filesize': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
+        'download_speed': '0',
+      })
 
       opened_stream = stream.open()
       if use_segment:
@@ -550,6 +556,7 @@ class LogicTwitch(LogicModuleBase):
                 logger.error(f'[{streamer_id}] exception: {e}')
                 error_count += 1
                 if error_count > 5:
+                  logger.error(f'[{streamer_id}] Stopping download stream')
                   self.set_download_status(streamer_id, {
                     'manual_stop': True
                   })
@@ -563,18 +570,14 @@ class LogicTwitch(LogicModuleBase):
                 byte_diff = filesize - before_bytes_for_speed
                 before_time_for_speed = datetime.now()
                 before_bytes_for_speed = filesize 
-                current_speed = Util.sizeof_fmt(byte_diff/time_diff, suffix='Bytes/Second')
-                download_time = datetime.now() - start_time
-                download_speed = Util.sizeof_fmt(filesize/download_time.seconds, suffix='Bytes/Second')
+                current_speed = Util.sizeof_fmt(byte_diff/time_diff, suffix='B/s')
+                download_speed = Util.sizeof_fmt(filesize/elapsed_time, suffix='B/s')
                 self.set_download_status(streamer_id, {
                   'save_files': save_files,
-                  'current_bitrate': current_bitrate,
                   'current_speed': current_speed,
                   'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, elapsed_time/60, elapsed_time%60),
                   'start_time': '' if start_time is None else str(start_time).split('.')[0][5:],
-                  'end_time': '' if end_time is None else str(end_time).split('.')[0][5:],
-                  'download_time': '' if download_time is None else '%02d:%02d:%02d' % (download_time.seconds/3600, download_time.seconds/60, download_time.seconds%60),
-                  'filesize': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='Bytes'),
+                  'filesize': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
                   'download_speed': '',
                 })
               # next part_number
@@ -594,6 +597,7 @@ class LogicTwitch(LogicModuleBase):
               logger.error(f'[{streamer_id}] exception: {e}')
               error_count += 1
               if error_count > 5:
+                logger.error(f'[{streamer_id}] Stopping download stream')
                 self.set_download_status(streamer_id, {
                   'manual_stop': True
                 })
@@ -607,18 +611,14 @@ class LogicTwitch(LogicModuleBase):
               byte_diff = filesize - before_bytes_for_speed
               before_time_for_speed = datetime.now()
               before_bytes_for_speed = filesize 
-              current_speed = Util.sizeof_fmt(byte_diff/time_diff, suffix='Bytes/Second')
-              download_time = datetime.now() - start_time
-              download_speed = Util.sizeof_fmt(filesize/download_time.seconds, suffix='Bytes/Second')
+              current_speed = Util.sizeof_fmt(byte_diff/time_diff, suffix='B/s')
+              download_speed = Util.sizeof_fmt(filesize/elapsed_time, suffix='B/s')
               self.set_download_status(streamer_id, {
                 'save_files': save_files,
-                'current_bitrate': current_bitrate,
                 'current_speed': current_speed,
                 'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, elapsed_time/60, elapsed_time%60),
                 'start_time': '' if start_time is None else str(start_time).split('.')[0][5:],
-                'end_time': '' if end_time is None else str(end_time).split('.')[0][5:],
-                'download_time': '' if download_time is None else '%02d:%02d:%02d' % (download_time.seconds/3600, download_time.seconds/60, download_time.seconds%60),
-                'filesize': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='Bytes'),
+                'filesize': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
                 'download_speed': '',
               })
             # next part_number
@@ -626,7 +626,19 @@ class LogicTwitch(LogicModuleBase):
               break
           target.close()
       opened_stream.close()
+      del opened_stream
       del stream 
+
+      end_time = datetime.now()
+      elapsed_time = (end_time - start_time).total_seconds()
+      download_speed = Util.sizeof_fmt(filesize/elapsed_time, suffix='B/s')
+      self.set_download_status(streamer_id, {
+        'running': False,
+        'elapsed_time': elapsed_time,
+        'download_speed': download_speed,
+        'end_time': '' if end_time is None else str(end_time).split('.')[0][5:],
+      })
+
       if len(save_files) > 0:
         last_file = save_files[-1]
         if os.path.isfile(last_file) and os.path.getsize(last_file) < (512 * 1024):
@@ -635,6 +647,8 @@ class LogicTwitch(LogicModuleBase):
           self.set_download_status(streamer_id, {
             'save_files': save_files
           })
+      
+      self.clear_download_status(streamer_id)
     except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
@@ -658,12 +672,11 @@ class ModelTwitchItem(db.Model):
   save_files = db.Column(db.String)
   use_segment = db.Column(db.Boolean)
   segment_size = db.Column(db.Integer)
-  filesize = db.Column(db.BigInteger)
-  download_time = db.Column(db.String)
+  filesize = db.Column(db.String, default='0')
   download_speed = db.Column(db.String)
-  start_time = db.Column(db.DateTime)
-  end_time = db.Column(db.DateTime)
-  elapsed_time = db.Column(db.DateTime)
+  start_time = db.Column(db.String)
+  end_time = db.Column(db.String)
+  elapsed_time = db.Column(db.String)
   quality = db.Column(db.String)
   options = db.Column(db.String)
 
@@ -709,7 +722,7 @@ class ModelTwitchItem(db.Model):
     ret = {}
     page = int(req.form['page']) if 'page' in req.form else 1
     page_size = 30
-    job_id = ''
+    # job_id = ''
     search = req.form['search_word'] if 'search_word' in req.form else ''
     option = req.form['option'] if 'option' in req.form else 'all'
     order = req.form['order'] if 'order' in req.form else 'desc'
@@ -756,7 +769,7 @@ class ModelTwitchItem(db.Model):
 
   @classmethod
   def plugin_load(cls):
-    items = db.session.query(cls).filter(cls.filesize < (512 * 1024)).all()
+    items = db.session.query(cls).filter(cls.filesize < (32 * 1024)).all()
     for item in items:
       file_list = cls.get_file_list_by_id(item.id)
       directory = file_list['directory']
@@ -810,12 +823,12 @@ class ModelTwitchItem(db.Model):
   @classmethod
   def update(cls, download_status):
     item = cls.get_by_id(download_status['db_id'])
+    if item is None: return
     item.running = download_status['running']
-    item.manual_stop = initial_values['manual_stop']
+    item.manual_stop = download_status['manual_stop']
     item.save_files = '\n'.join(download_status['save_files'])
     item.filesize = download_status['filesize']
-    item.download_time = download_status['download_time']
-    item.download_speed = download_status['donwload_speed']
+    item.download_speed = download_status['download_speed']
     item.start_time = download_status['start_time']
     item.end_time = download_status['end_time']
     item.elapsed_time = download_status['elapsed_time']
