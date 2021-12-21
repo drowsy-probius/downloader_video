@@ -90,12 +90,12 @@ $(document).ready(function(){
 });
 
 socket.on('start', function(data){
-  console.debug(`socket connected`);
+  console.log(`socket connected`);
   // on_start();
 });
 
 socket.on('update', function(data){
-  console.debug(`${data}`);
+  console.log(data);
   streamlink_process_status[data.streamer_id] = data.status;
   render_update(data);
 });
@@ -211,7 +211,7 @@ function render_update(data)
   if(!data.streamer_id) return;
 
   const streamer_id = data.streamer_id;
-  const status = data.running;
+  const status = data.status;
 
   const status_div = document.getElementById(streamer_id);
   const div_streamer = document.getElementById(`${streamer_id}_streamer`)
@@ -224,10 +224,10 @@ function render_update(data)
 
   div_streamer.innerHTML = streamer_id_link(status.author, streamer_id)
   div_stream_info.innerHTML = `${status.title}<br>${category_link(status.category)}`;
-  div_started.innerHTML = `${status.started_time || 'Offline'}<br>${status.quality}`;
+  div_started.innerHTML = `${status.start_time || 'Offline'}<br>${status.quality}`;
   div_elapsed_time.innerText = status.elapsed_time;
-  div_speed.innerText = status.speed;
-  div_size.innerText = formatBytes(status.size);
+  div_speed.innerText = status.current_speed;
+  div_size.innerText = formatBytes(status.filesize);
 
   if(status.started_time)
   {
