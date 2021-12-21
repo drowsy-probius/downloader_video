@@ -64,6 +64,7 @@ class LogicTwitch(LogicModuleBase):
     'url': str,
     'filepath': str, // 파일 저장 절대 경로
     'filename': str, // {part_number} 교체하기 전 이름
+    'save_format': str, // segment 사용할 때 part_number가 %02d로 교체된 파일명의 full path
     'save_files: [],  // {part_number} 교체한 후 이름 목록
     'quality': str,
     'use_segment': bool,
@@ -451,6 +452,7 @@ class LogicTwitch(LogicModuleBase):
       'url': '',
       'filepath': '',
       'filename': '',
+      'save_format': '',
       'save_files': [],
       'quality': '',
       'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
@@ -489,30 +491,32 @@ class LogicTwitch(LogicModuleBase):
       'filename': filename,
     })
 
-    self.download_stream(streamer_id, stream)
+    save_format = self.download_status[streamer_id]['filename']
+    if self.download_status[streamer_id]['use_segment']:
+      if '{part_number}' in save_format:
+        save_format = save_format.replace('{part_number}', '%02d')
+      else:
+        save_format = save_format + ' part%02d'
+    if self.download_status[streamer_id]['quality'] == 'audio_only':
+      save_format = save_format + '.mp3'
+    else:
+      save_format = save_format + '.mp4'
+    save_format = os.path.join(self.download_status[streamer_id]['filepath'], save_format)
+    self.set_download_status(streamer_id, {
+      'save_format': save_format,
+    })
+
+    if P.ModelSetting.get_bool('twitch_use_ffmpeg'):
+      self.download_strem_ffmpeg(streamer_id)
+    else:
+      self.download_stream(streamer_id, stream)
   
 
   def download_stream(self, streamer_id, stream):
     try:
-      def get_save_file_format(path, filename, ext, use_segment):
-        save_file_format = ''
-        filename = filename
-        if use_segment:
-          if '{part_number}' in filename:
-            filename = filename.replace('{part_number}', '%02d')
-          else:
-            filename = filename + ' part%02d'
-        filename = filename + ext
-        save_file_format = os.path.join(path, filename)
-        return save_file_format
-          
-      # set initial status values
-      file_extension = '.mp3' if self.download_status[streamer_id]['quality'] == 'audio_only' else '.mp4'
-      filename = self.download_status[streamer_id]['filename']
-      filepath = self.download_status[streamer_id]['filepath']
       use_segment = self.download_status[streamer_id]['use_segment']
       segment_size = self.download_status[streamer_id]['segment_size']
-      save_file_format = get_save_file_format(filepath, filename, file_extension, use_segment)
+      save_format = self.download_status[streamer_id]['save_format']
       save_files = []
 
       current_speed = 0
@@ -544,7 +548,7 @@ class LogicTwitch(LogicModuleBase):
         part_number = 0
         while not self.download_status[streamer_id]['manual_stop']:
           part_number += 1
-          save_file = save_file_format % part_number
+          save_file = save_format % part_number
           with open(save_file, 'wb') as target:
             save_files.append(save_file)
             logger.debug(f'[{streamer_id}] Start to download stream part {part_number}')
@@ -586,6 +590,7 @@ class LogicTwitch(LogicModuleBase):
                 break
             target.close()
       else:
+        save_file = save_format
         with open(save_file, 'wb') as target:
           save_files.append(save_file)
           logger.debug(f'[{streamer_id}] Start to download stream')
@@ -656,10 +661,30 @@ class LogicTwitch(LogicModuleBase):
       logger.error(traceback.format_exc())
 
 
-  def download_strem_ffmpeg(self, streamer_id, save_name):
+  def download_strem_ffmpeg(self, streamer_id):
+    '''
+    호출 전에 download_status에서
+    quality, {part_number}가 %02d로 치환된 filename가 설정 되어 있어야 함.
+    이거는 subprocess로 실행하고 로그 가져오기
+    '''
     # https://github.com/streamlink/streamlink/discussions/3749
     # streamlink -O URL QUALITY [--session_options] | ffmpeg -i pipe:0 -c:v copy -c:a copy -f matroska -y file.mkv
-    pass
+    # streamlink -O https://www.twitch.tv/jungtaejune best | ffmpeg -i pipe:0 -c:v copy -c:a copy test.mp4
+    # ffmpeg -i "http://iaa.flashmediacast.com:2387/live//radio-93-3/playlist.m3u8" -acodec mp3 -ab 129k radio.mp3
+    # segment_time 단위는 초임
+    # streamlink -O https://www.twitch.tv/jungtaejune best | ffmpeg -i pipe:0 -c:v copy -c:a copy -f segment -segment_time 120 -reset_timestamps 1 output_%03d.mp4
+    # 다운로드 중 log는 다음과 같음
+    # frame=  360 fps= 62 q=-1.0 size=N/A time=00:00:05.99 bitrate=N/A speed=1.03x
+    # segment 시작 부분은 [segment @ 0x559d4934d2c0] Opening 'output_000.mp4' for writing
+    from plugin.ffmpeg.model import ModelSetting as FfmpegModelSetting
+    ffmpeg_path = FfmpegModelSetting.get('ffmpeg_path')
+    url = f'https://www.twitch.tv/{streamer_id}'
+    quality = self.download_status[streamer_id]['quality']
+    use_segment = self.download_status[streamer_id]['use_segment']
+    segment_size = self.download_status[streamer_id]['segment_size']
+    audio_only = (quality == 'audio_only')
+
+    self.clear_download_status(streamer_id)
 
 #########################################################
 # db
@@ -828,6 +853,13 @@ class ModelTwitchItem(db.Model):
     if item is None: return
     item.running = download_status['running']
     item.manual_stop = download_status['manual_stop']
+    item.author = download_status['author']
+    item.title = download_status['title']
+    item.category = download_status['category']
+    item.quality = download_status['quality']
+    item.use_segment = download_status['use_segment']
+    item.segment_size = download_status['segment_size']
+    item.options = download_status['options']
     item.save_files = '\n'.join(download_status['save_files'])
     item.filesize = download_status['filesize']
     item.download_speed = download_status['download_speed']
