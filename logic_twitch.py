@@ -552,7 +552,7 @@ class LogicTwitch(LogicModuleBase):
       self.set_download_status(streamer_id, {
         'save_files': save_files,
         'current_speed': current_speed,
-        'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, elapsed_time/60, elapsed_time%60),
+        'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
         'start_time': '' if start_time is None else str(start_time).split('.')[0][5:],
         'filesize': filesize,
         'filesize_str': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
@@ -598,7 +598,7 @@ class LogicTwitch(LogicModuleBase):
                 self.set_download_status(streamer_id, {
                   'save_files': save_files,
                   'current_speed': current_speed,
-                  'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, elapsed_time/60, elapsed_time%60),
+                  'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
                   'start_time': '' if start_time is None else str(start_time).split('.')[0][5:],
                   'filesize': filesize,
                   'filesize_str': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
@@ -642,7 +642,7 @@ class LogicTwitch(LogicModuleBase):
               self.set_download_status(streamer_id, {
                 'save_files': save_files,
                 'current_speed': current_speed,
-                'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, elapsed_time/60, elapsed_time%60),
+                'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
                 'start_time': '' if start_time is None else str(start_time).split('.')[0][5:],
                 'filesize': filesize,
                 'filesize_str': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
@@ -756,7 +756,7 @@ class LogicTwitch(LogicModuleBase):
               'current_speed': current_speed if is_bitrate_exits else speed_times + 'x',
               'filesize': filesize if is_size_exists else -1,
               'filesize_str': filesize_str if is_size_exists else 'N/A',
-              'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, elapsed_time/60, elapsed_time%60),
+              'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
               'status': 'downloading',
             })
           elif re.compile(r"\[segment @ .*\] Opening '(?P<filename>.*)' for writing").search(line):
@@ -850,7 +850,7 @@ class LogicTwitch(LogicModuleBase):
     self.set_download_status(streamer_id, {
       'running': False,
       'end_time': '' if end_time is None else str(end_time).split('.')[0][5:],
-      'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, elapsed_time/60, elapsed_time%60),
+      'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
       'download_speed': download_speed,
     })
 
