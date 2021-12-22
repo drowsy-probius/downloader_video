@@ -712,7 +712,7 @@ class LogicTwitch(LogicModuleBase):
 
       for line in iter(process.stdout.readline, ''):
         # line = line.strip()
-        logger.debug(line)
+        # logger.debug(line)
         try:
           if re.compile(r"video:(?P<videosize>\S*)\s*audio:(?P<audiosize>\S*)\s*subtitle:(?P<subsize>\S*)\s*other streams:(?P<streamsize>\S*)\s*global headers:(?P<headersize>\S*)").search(line):
             match = re.compile(r"video:(?P<videosize>\S*)\s*audio:(?P<audiosize>\S*)\s*subtitle:(?P<subsize>\S*)\s*other streams:(?P<streamsize>\S*)\s*global headers:(?P<headersize>\S*)").search(line)
