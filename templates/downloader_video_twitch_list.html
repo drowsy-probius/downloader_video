@@ -162,7 +162,7 @@ function make_list(data) {
     tmp = `${data[i].title}<br>${data[i].category}<br>화질: ${data[i].quality}`
     str += m_col(3, tmp)
 
-    tmp = `크기: ${data[i].filesize}, 경과: ${data[i].elapsed_time} ${data[i].running ? '(다운로드 중)' : '(완료)'}`
+    tmp = `크기: ${data[i].filesize_str}, 경과: ${data[i].elapsed_time} ${data[i].running ? '(다운로드 중)' : '(완료)'}`
     const search_streamer_btn = m_button('search_streamer_btn', '스트리머검색', [{'key': 'streamer_id', 'value': data[i].streamer_id}]);
     const search_category_btn = m_button('search_category_btn', '카테고리검색', [{'key': 'category', 'value': data[i].category}]);
     const json_btn = m_button('json_btn', 'JSON', [{'key': 'db_id', 'value': data[i].id}]);
