@@ -29,10 +29,10 @@ class LogicTwitch(LogicModuleBase):
     'twitch_db_version': '1',
     'twitch_use_ffmpeg': 'True',
     'twitch_download_path': os.path.join(path_data, P.package_name, 'twitch'),
-    'twitch_filename_format': '[%Y-%m-%d %H:%M][{category}] {title} part{part_number}',
+    'twitch_filename_format': '[%Y-%m-%d %H:%M][{category}] {title}',
     'twitch_directory_name_format': '{author} ({streamer_id})/%y%m',
     'twitch_file_use_segment': 'True',
-    'twitch_file_segment_size': '32',
+    'twitch_file_segment_size': '30',
     'twitch_streamer_ids': '',
     'twitch_auto_make_folder': 'True',
     'twitch_auto_start': 'False',
@@ -150,7 +150,6 @@ class LogicTwitch(LogicModuleBase):
         if delete_file:
           save_files = ModelTwitchItem.get_file_list_by_id(db_id)
           for save_file in save_files:
-            logger.debug(save_file)
             if os.path.exists(save_file) and os.path.isfile(save_file):
               shutil_task.remove(save_file)
         db_return = ModelTwitchItem.delete_by_id(db_id)
@@ -671,7 +670,7 @@ class LogicTwitch(LogicModuleBase):
 
       if len(save_files) > 0:
         last_file = save_files[-1]
-        if os.path.isfile(last_file) and os.path.getsize(last_file) < (512 * 1024):
+        if os.path.isfile(last_file) and os.path.getsize(last_file) < (1 * 1024):
           shutil_task.remove(last_file)
           save_files = save_files[:-1]
           self.set_download_status(streamer_id, {
@@ -701,50 +700,61 @@ class LogicTwitch(LogicModuleBase):
     # plugin/ffmpeg/interface_program_ffmpeg.py line:309 참고
     # segment 시작 부분은 [segment @ 0x559d4934d2c0] Opening 'output_000.mp4' for writing
     def ffmpeg_log_thread(process, streamlink_process):
+      def str_to_bytes(text):
+        result = 0
+        if 'kB' in text:
+          result = int(text.split('kB')[0])
+          result = result * 1024
+        elif 'mB' in text:
+          result = int(text.split('mB')[0])
+          result = result * 1024 * 1024
+        return result
+
       for line in iter(process.stdout.readline, ''):
         # line = line.strip()
-        # logger.debug(line)
+        logger.debug(line)
         try:
+          if re.compile(r"video:(?P<videosize>\S*)\s*audio:(?P<audiosize>\S*)\s*subtitle:(?P<subsize>\S*)\s*other streams:(?P<streamsize>\S*)\s*global headers:(?P<headersize>\S*)").search(line):
+            match = re.compile(r"video:(?P<videosize>\S*)\s*audio:(?P<audiosize>\S*)\s*subtitle:(?P<subsize>\S*)\s*other streams:(?P<streamsize>\S*)\s*global headers:(?P<headersize>\S*)").search(line)
+            videosize = str_to_bytes(match.group('videosize'))
+            audiosize = str_to_bytes(match.group('audiosize'))
+            self.set_download_status(streamer_id, {
+              'filesize': videosize + audiosize,
+              'filesize_str': Util.sizeof_fmt(videosize + audiosize, suffix='B')
+            })
+          
           if self.download_status[streamer_id]['manual_stop']:
-            streamlink_process.kill()
-
-          if line.find('Server returned 404 Not Found') != -1 or line.find('Unknown error') != -1:
-            self.set_download_status(streamer_id, {
-              'status': 'cannot access to url'
-            })
-          elif line.find('No such file or directory') != -1:
-            self.set_download_status(streamer_id, {
-              'status': 'No such file or directory',
-            })
+            if streamlink_process.poll() is None:
+              streamlink_process.kill()
           elif re.compile(r'size\=\s*(?P<size>\S*)\s*time\=(?P<hour>\d{2})\:(?P<minute>\d{2})\:(?P<second>\d{2})\.(?P<milisecond>\d{2})\s*bitrate\=\s*(?P<bitrate>\S*)\s*speed\=\s*(?P<speed>\S*)x').search(line):
             match = re.compile(r'size\=\s*(?P<size>\S*)\s*time\=(?P<hour>\d{2})\:(?P<minute>\d{2})\:(?P<second>\d{2})\.(?P<milisecond>\d{2})\s*bitrate\=\s*(?P<bitrate>\S*)\s*speed\=\s*(?P<speed>\S*)x').search(line)
             elapsed_time = int(match.group('milisecond')) / 100
             elapsed_time += int(match.group('second'))
             elapsed_time += int(match.group('minute')) * 60
             elapsed_time += int(match.group('hour')) * 60 * 60
+            speed_times = match.group('speed')
             current_speed = match.group('bitrate')
             filesize = match.group('size')
 
-            if 'kbits/s' in current_speed:
-              current_speed = float(current_speed.split('kbits/s')[0])
-              current_speed = current_speed * 128
-            elif 'mbits/s' in current_speed:
-              current_speed = float(current_speed.split('mbits/s')[0])
-              current_speed = current_speed * 128 * 1024
-            current_speed = Util.sizeof_fmt(current_speed, suffix='B/s')
+            is_size_exists = 'N/A' not in filesize
+            is_bitrate_exits = 'N/A' not in current_speed
 
-            if 'kB' in filesize:
-              filesize = int(filesize.split('kB')[0])
-              filesize = filesize * 1024
-            elif 'mB' in filesize:
-              filesize = int(filesize.split('mB')[0])
-              filesize = filesize * 1024 * 1024
-            filesize_str = Util.sizeof_fmt(filesize, suffix='B')
+            if is_bitrate_exits:
+              if 'kbits/s' in current_speed:
+                current_speed = float(current_speed.split('kbits/s')[0])
+                current_speed = current_speed * 128
+              elif 'mbits/s' in current_speed:
+                current_speed = float(current_speed.split('mbits/s')[0])
+                current_speed = current_speed * 128 * 1024
+              current_speed = Util.sizeof_fmt(current_speed, suffix='B/s')
+
+            if is_size_exists:
+              filesize_str = Util.sizeof_fmt(str_to_bytes(filesize), suffix='B')
 
             self.set_download_status(streamer_id, {
-              'current_speed': current_speed,
-              'filesize': filesize,
-              'filesize_str': filesize_str,
+              'current_speed': current_speed if is_bitrate_exits else speed_times + 'x',
+              'filesize': filesize if is_size_exists else -1,
+              'filesize_str': filesize_str if is_size_exists else 'N/A',
               'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, elapsed_time/60, elapsed_time%60),
               'status': 'downloading',
             })
@@ -755,6 +765,14 @@ class LogicTwitch(LogicModuleBase):
             save_files.append(save_file)
             self.set_download_status(streamer_id, {
               'save_files': save_files
+            })
+          elif line.find('Server returned 404 Not Found') != -1 or line.find('Unknown error') != -1:
+            self.set_download_status(streamer_id, {
+              'status': 'cannot access to url'
+            })
+          elif line.find('No such file or directory') != -1:
+            self.set_download_status(streamer_id, {
+              'status': 'No such file or directory',
             })
         except Exception as e:
           logger.error(f'Exception: {e}')
@@ -791,13 +809,15 @@ class LogicTwitch(LogicModuleBase):
 
     start_time = datetime.now()
     end_time = ''
-    download_speed = ''
+    download_speed = 'N/A'
 
     self.set_download_status(streamer_id, {
       'status': 'start',
-      'filesize': 0,
-      'filesize_str': '',
       'start_time': '' if start_time is None else str(start_time).split('.')[0][5:],
+      'filesize': 0,
+      'filesize_str': 'waiting',
+      'current_speed': 'waiting',
+      'elapsed_time': 'waiting',
     })
 
     if not use_segment:
@@ -821,7 +841,10 @@ class LogicTwitch(LogicModuleBase):
 
     end_time = datetime.now()
     elapsed_time = (end_time - start_time).total_seconds()
-    download_speed = Util.sizeof_fmt(self.download_status[streamer_id]['filesize']/elapsed_time, suffix='B/s')
+
+    is_size_exists = (self.download_status[streamer_id]['filesize'] > 0)
+    if is_size_exists:
+      download_speed = Util.sizeof_fmt(self.download_status[streamer_id]['filesize']/elapsed_time, suffix='B/s')
     
     self.set_download_status(streamer_id, {
       'running': False,
@@ -853,7 +876,7 @@ class ModelTwitchItem(db.Model):
   save_files = db.Column(db.String)
   use_segment = db.Column(db.Boolean)
   segment_size = db.Column(db.Integer)
-  filesize = db.Column(db.String, default=0)
+  filesize = db.Column(db.Integer, default=0)
   filesize_str = db.Column(db.String, default='0')
   download_speed = db.Column(db.String)
   start_time = db.Column(db.String)
@@ -948,11 +971,13 @@ class ModelTwitchItem(db.Model):
 
   @classmethod
   def plugin_load(cls):
-    items = db.session.query(cls).filter(cls.filesize != -1).filter(cls.filesize < (32 * 1024)).all()
+    items = db.session.query(cls).filter(cls.filesize < (1 * 1024)).all() # 1kB
     for item in items:
+      if item.filesize == -1: continue
       save_files = cls.get_file_list_by_id(item.id)
       for save_file in save_files:
         if os.path.exists(save_file) and os.path.isfile(save_file):
+          logger.debug('delete from model')
           shutil_task.remove(save_file)
       cls.delete_by_id(item.id)
     db.session.query(cls).update({'running': False})
