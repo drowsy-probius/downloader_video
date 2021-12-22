@@ -749,7 +749,8 @@ class LogicTwitch(LogicModuleBase):
               current_speed = Util.sizeof_fmt(current_speed, suffix='B/s')
 
             if is_size_exists:
-              filesize_str = Util.sizeof_fmt(str_to_bytes(filesize), suffix='B')
+              filesize = str_to_bytes(filesize)
+              filesize_str = Util.sizeof_fmt(filesize, suffix='B')
 
             self.set_download_status(streamer_id, {
               'current_speed': current_speed if is_bitrate_exits else speed_times + 'x',
