@@ -86,13 +86,16 @@ let streamlink_process_status = {}
 const socket = io.connect(window.location.protocol + "//" + document.domain + ":" + location.port + "/" + package_name + '/' + sub);
 
 $(document).ready(function(){
-});
-
-socket.on('start', function(data){
   on_start();
 });
 
+socket.on('start', function(data){
+  console.log(`socket connected`);
+  // on_start();
+});
+
 socket.on('update', function(data){
+  console.log(data);
   streamlink_process_status[data.streamer_id] = data.status;
   render_update(data);
 });
@@ -159,21 +162,22 @@ function category_link(category)
 function render_list(streamlink_process_status)
 {
   str = '';
-  for (let streamer_id in streamlink_process_status)
+  for (const streamer_id in streamlink_process_status)
   {    
-    let name = streamer_id_link(streamlink_process_status[streamer_id].author, streamer_id);
-    let datetime = streamlink_process_status[streamer_id].started_time;
-    let enable = streamlink_process_status[streamer_id].enable;
-    let quality = streamlink_process_status[streamer_id].quality;
+    const running = streamlink_process_status[streamer_id].running;
+    const name = streamer_id_link(streamlink_process_status[streamer_id].author, streamer_id);
+    const start_time = streamlink_process_status[streamer_id].start_time;
+    const enable = streamlink_process_status[streamer_id].enable;
+    const quality = streamlink_process_status[streamer_id].quality;
 
     let streamer = `<div id=${streamer_id}_streamer>${name}</div>`
     let stream_info = `<div id=${streamer_id}_stream_info>${streamlink_process_status[streamer_id].title}<br>${category_link(streamlink_process_status[streamer_id].category)}</div>`
-    let started = `<div id=${streamer_id}_started>${datetime || 'Offline'}<br>${quality}</div>`;
+    let started = `<div id=${streamer_id}_started>${running ? start_time : 'Offline'}<br>${quality}</div>`;
     let elapsed_time = `<div id=${streamer_id}_elapsed_time>${streamlink_process_status[streamer_id].elapsed_time}</div>`;
-    let speed = `<div id=${streamer_id}_speed class="status_speed">${streamlink_process_status[streamer_id].speed}</div>`
-    let size = `<div id=${streamer_id}_size>${formatBytes(streamlink_process_status[streamer_id].size)}</div>`
+    let speed = `<div id=${streamer_id}_speed class="status_speed">${streamlink_process_status[streamer_id].current_speed}</div>`
+    let size = `<div id=${streamer_id}_size>${streamlink_process_status[streamer_id].filesize_str}</div>`
 
-    str += m_row_start_id(streamer_id, datetime, enable);
+    str += m_row_start_id(streamer_id, running, enable);
     str += m_col(2, streamer);
     str += m_col(2, started);
     str += m_col(3, stream_info);
@@ -205,8 +209,11 @@ function render_list(streamlink_process_status)
 
 function render_update(data)
 {
+  if(!data.streamer_id) return;
+
   const streamer_id = data.streamer_id;
   const status = data.status;
+  const running = status.running;
 
   const status_div = document.getElementById(streamer_id);
   const div_streamer = document.getElementById(`${streamer_id}_streamer`)
@@ -219,12 +226,12 @@ function render_update(data)
 
   div_streamer.innerHTML = streamer_id_link(status.author, streamer_id)
   div_stream_info.innerHTML = `${status.title}<br>${category_link(status.category)}`;
-  div_started.innerHTML = `${status.started_time || 'Offline'}<br>${status.quality}`;
+  div_started.innerHTML = `${running ? status.start_time : 'Offline'}<br>${status.quality}`;
   div_elapsed_time.innerText = status.elapsed_time;
-  div_speed.innerText = status.speed;
-  div_size.innerText = formatBytes(status.size);
+  div_speed.innerText = status.current_speed;
+  div_size.innerText = status.filesize_str;
 
-  if(status.started_time)
+  if(status.running)
   {
     status_div.classList.remove('offline');
     status_div.classList.add('online');
