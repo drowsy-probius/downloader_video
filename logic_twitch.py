@@ -31,7 +31,7 @@ class LogicTwitch(LogicModuleBase):
     'twitch_download_path': os.path.join(path_data, P.package_name, 'twitch'),
     'twitch_filename_format': '[%Y-%m-%d %H:%M][{category}] {title}',
     'twitch_directory_name_format': '{author} ({streamer_id})/%y%m',
-    'twitch_file_use_segment': 'True',
+    'twitch_file_use_segment': 'False',
     'twitch_file_segment_size': '30',
     'twitch_streamer_ids': '',
     'twitch_auto_make_folder': 'True',
@@ -44,7 +44,7 @@ class LogicTwitch(LogicModuleBase):
     'streamlink_twitch_disable_hosting': 'True',
     'streamlink_twitch_disable_reruns': 'True',
     'streamlink_twitch_low_latency': 'True',
-    'streamlink_hls_live_edge': 3,
+    'streamlink_hls_live_edge': '2',
     'streamlink_chunk_size': '4096', # 4KB
     'streamlink_options': 'False', # html 토글 위한 쓰레기 값임.
   }
@@ -544,7 +544,7 @@ class LogicTwitch(LogicModuleBase):
       # 다운로드와 관련된 값 선언
       # chunk_size = 4096 * 1024 # 4k bytes
       chunk_size = P.ModelSetting.get_int('streamlink_chunk_size')
-      status_update_interval = 3
+      status_update_interval = 1
 
       before_time_for_speed = datetime.now()
       before_bytes_for_speed = 0
@@ -613,8 +613,8 @@ class LogicTwitch(LogicModuleBase):
         with open(save_file, 'wb') as target:
           save_files.append(save_file)
           logger.debug(f'[{streamer_id}] Start to download stream')
+          error_count = 0
           while not self.download_status[streamer_id]['manual_stop']:
-            error_count = 0
             try:
               target.write(opened_stream.read(chunk_size))
             except Exception as e:
@@ -648,9 +648,6 @@ class LogicTwitch(LogicModuleBase):
                 'filesize_str': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
                 'download_speed': '',
               })
-            # next part_number
-            if elapsed_time / 60 > (part_number * segment_size):
-              break
           target.close()
       
       opened_stream.close()
