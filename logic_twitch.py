@@ -667,7 +667,7 @@ class LogicTwitch(LogicModuleBase):
 
       if len(save_files) > 0:
         last_file = save_files[-1]
-        if os.path.isfile(last_file) and os.path.getsize(last_file) < (1 * 1024):
+        if os.path.isfile(last_file) and os.path.getsize(last_file) < (12 * 1024):
           shutil_task.remove(last_file)
           save_files = save_files[:-1]
           self.set_download_status(streamer_id, {
@@ -969,7 +969,7 @@ class ModelTwitchItem(db.Model):
 
   @classmethod
   def plugin_load(cls):
-    items = db.session.query(cls).filter(cls.filesize < (1 * 1024)).all() # 1kB
+    items = db.session.query(cls).filter(cls.filesize < (12 * 1024)).all() # 12kB
     for item in items:
       if item.filesize == -1: continue
       save_files = cls.get_file_list_by_id(item.id)
