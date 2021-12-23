@@ -529,6 +529,8 @@ class LogicTwitch(LogicModuleBase):
 
   def download_stream(self, streamer_id, stream):
     try:
+      opened_stream = stream.open()
+
       use_segment = self.download_status[streamer_id]['use_segment']
       segment_size = self.download_status[streamer_id]['segment_size']
       save_format = self.download_status[streamer_id]['save_format']
@@ -560,7 +562,6 @@ class LogicTwitch(LogicModuleBase):
         'status': 'start'
       })
 
-      opened_stream = stream.open()
       if use_segment:
         part_number = 0
         while not self.download_status[streamer_id]['manual_stop']:
@@ -572,7 +573,9 @@ class LogicTwitch(LogicModuleBase):
             error_count = 0
             while not self.download_status[streamer_id]['manual_stop']:
               try:
-                target.write(opened_stream.read(chunk_size))
+                stream_data = opened_stream.read(chunk_size)
+                filesize += len(stream_data)
+                target.write(stream_data)
               except Exception as e:
                 logger.error(f'[{streamer_id}] streamlink cannot read chunk. error count {error_count}')
                 logger.error(f'[{streamer_id}] exception: {e}')
@@ -585,9 +588,7 @@ class LogicTwitch(LogicModuleBase):
                   })
                   break
               
-              filesize += chunk_size
               elapsed_time = (datetime.now() - start_time).total_seconds()
-
               time_diff = (datetime.now() - before_time_for_speed).total_seconds()
               if time_diff > status_update_interval:
                 byte_diff = filesize - before_bytes_for_speed
@@ -616,7 +617,9 @@ class LogicTwitch(LogicModuleBase):
           error_count = 0
           while not self.download_status[streamer_id]['manual_stop']:
             try:
-              target.write(opened_stream.read(chunk_size))
+              stream_data = opened_stream.read(chunk_size)
+              filesize += len(stream_data)
+              target.write(stream_data)
             except Exception as e:
               logger.error(f'[{streamer_id}] streamlink cannot read chunk. error count {error_count}')
               logger.error(f'[{streamer_id}] exception: {e}')
@@ -629,9 +632,7 @@ class LogicTwitch(LogicModuleBase):
                 })
                 break
             
-            filesize += chunk_size
             elapsed_time = (datetime.now() - start_time).total_seconds()
-
             time_diff = (datetime.now() - before_time_for_speed).total_seconds()
             if time_diff > status_update_interval:
               byte_diff = filesize - before_bytes_for_speed
