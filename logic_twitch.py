@@ -670,7 +670,7 @@ class LogicTwitch(LogicModuleBase):
         if os.path.isfile(last_file) and os.path.getsize(last_file) < (12 * 1024):
           shutil_task.remove(last_file)
           save_files = save_files[:-1]
-          if len(save_file) == 0:
+          if len(save_files) == 0:
             ModelTwitchItem.delete_by_id(self.download_status[streamer_id]['db_id'])
           else:
             self.set_download_status(streamer_id, {
