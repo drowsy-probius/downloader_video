@@ -166,6 +166,7 @@ class LogicTwitch(LogicModuleBase):
     before_streamer_ids = [sid for sid in self.download_status]
     old_streamer_ids = [sid for sid in before_streamer_ids if sid not in streamer_ids]
     new_streamer_ids = [sid for sid in streamer_ids if sid not in before_streamer_ids]
+    existing_streamer_ids [sid for sid in streamer_ids if sid in before_streamer_ids]
     for streamer_id in old_streamer_ids: 
       if self.download_status[streamer_id]['running']:
         # keep current download session until reboot
@@ -174,6 +175,9 @@ class LogicTwitch(LogicModuleBase):
         del self.download_status[streamer_id]
     for streamer_id in new_streamer_ids:
       self.clear_properties(streamer_id)
+    for existing_streamer_ids:
+      if not self.download_status[streamer_id]['running']:
+        self.clear_properties(streamer_id)
 
 
   def scheduler_function(self):
@@ -493,6 +497,7 @@ class LogicTwitch(LogicModuleBase):
       'quality': quality,
       'url': stream.url,
       'options': self.get_options(toString=True),
+      'use_ffmpeg': P.ModelSetting.get_bool('twitch_use_ffmpeg'),
       'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
       'segment_size': P.ModelSetting.get_int('twitch_file_segment_size'),
     })
