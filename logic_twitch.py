@@ -32,7 +32,7 @@ class LogicTwitch(LogicModuleBase):
     'twitch_filename_format': '[%Y-%m-%d %H:%M][{category}] {title}',
     'twitch_directory_name_format': '{author} ({streamer_id})/%y%m',
     'twitch_file_use_segment': 'False',
-    'twitch_file_segment_size': '30',
+    'twitch_file_segment_size': '60',
     'twitch_streamer_ids': '',
     'twitch_auto_make_folder': 'True',
     'twitch_auto_start': 'False',
