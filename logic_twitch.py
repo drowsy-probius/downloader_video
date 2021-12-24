@@ -175,7 +175,7 @@ class LogicTwitch(LogicModuleBase):
         del self.download_status[streamer_id]
     for streamer_id in new_streamer_ids:
       self.clear_properties(streamer_id)
-    for existing_streamer_ids:
+    for streamer_id in existing_streamer_ids:
       if not self.download_status[streamer_id]['running']:
         self.clear_properties(streamer_id)
 
