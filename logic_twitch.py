@@ -521,6 +521,7 @@ class LogicTwitch(LogicModuleBase):
       'save_format': save_format,
     })
 
+    logger.debug(f'[{streamer_id}] start to download')
     if P.ModelSetting.get_bool('twitch_use_ffmpeg'):
       self.download_stream_ffmpeg(streamer_id)
     else:
@@ -556,7 +557,7 @@ class LogicTwitch(LogicModuleBase):
         'save_files': save_files,
         'current_speed': current_speed,
         'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
-        'start_time': '' if start_time is None else str(start_time).split('.')[0][5:],
+        'start_time': '' if start_time is None else str(start_time).split('.')[0][2:],
         'filesize': filesize,
         'filesize_str': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
         'download_speed': '0',
@@ -601,7 +602,7 @@ class LogicTwitch(LogicModuleBase):
                   'save_files': save_files,
                   'current_speed': current_speed,
                   'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
-                  'start_time': '' if start_time is None else str(start_time).split('.')[0][5:],
+                  'start_time': '' if start_time is None else str(start_time).split('.')[0][2:],
                   'filesize': filesize,
                   'filesize_str': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
                   'download_speed': '',
@@ -645,7 +646,7 @@ class LogicTwitch(LogicModuleBase):
                 'save_files': save_files,
                 'current_speed': current_speed,
                 'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
-                'start_time': '' if start_time is None else str(start_time).split('.')[0][5:],
+                'start_time': '' if start_time is None else str(start_time).split('.')[0][2:],
                 'filesize': filesize,
                 'filesize_str': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
                 'download_speed': '',
@@ -663,7 +664,7 @@ class LogicTwitch(LogicModuleBase):
         'running': False,
         'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
         'download_speed': download_speed,
-        'end_time': '' if end_time is None else str(end_time).split('.')[0][5:],
+        'end_time': '' if end_time is None else str(end_time).split('.')[0][2:],
         'status': 'completed',
       })
 
@@ -816,7 +817,7 @@ class LogicTwitch(LogicModuleBase):
 
     self.set_download_status(streamer_id, {
       'status': 'start',
-      'start_time': '' if start_time is None else str(start_time).split('.')[0][5:],
+      'start_time': '' if start_time is None else str(start_time).split('.')[0][2:],
       'filesize': 0,
       'filesize_str': 'waiting',
       'current_speed': 'waiting',
@@ -851,7 +852,7 @@ class LogicTwitch(LogicModuleBase):
     
     self.set_download_status(streamer_id, {
       'running': False,
-      'end_time': '' if end_time is None else str(end_time).split('.')[0][5:],
+      'end_time': '' if end_time is None else str(end_time).split('.')[0][2:],
       'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
       'download_speed': download_speed,
     })
@@ -869,7 +870,7 @@ class ModelTwitchItem(db.Model):
   __table_args__ = {'mysql_collate': 'utf8_general_ci'}
   __bind_key__ = P.package_name
   id = db.Column(db.Integer, primary_key=True)
-  created_time = db.Column(db.DateTime)
+  created_time = db.Column(db.String)
   running = db.Column(db.Boolean, default=False)
   manual_stop = db.Column(db.Boolean, default=False)
   streamer_id = db.Column(db.String)
@@ -1010,7 +1011,7 @@ class ModelTwitchItem(db.Model):
   @classmethod
   def insert(cls, streamer_id, initial_values):
     item = ModelTwitchItem()
-    item.created_time = str(datetime.now()).split('.')[0][5:]
+    item.created_time = str(datetime.now()).split('.')[0][2:]
     item.streamer_id = streamer_id
     item.running = initial_values['running']
     item.manual_stop = initial_values['manual_stop']
