@@ -67,6 +67,7 @@ class LogicTwitch(LogicModuleBase):
     'save_format': str, // segment 사용할 때 part_number가 %02d로 교체된 파일명의 full path
     'save_files: [],  // {part_number} 교체한 후 이름 목록
     'quality': str,
+    'use_ffmpeg': bool,
     'use_segment': bool,
     'segment_size': int,
     'current_speed': str,
@@ -465,6 +466,7 @@ class LogicTwitch(LogicModuleBase):
       'save_format': '',
       'save_files': [],
       'quality': '',
+      'use_ffmpeg': P.ModelSetting.get_bool('twitch_use_ffmpeg'),
       'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
       'segment_size': P.ModelSetting.get_int('twitch_file_segment_size'),
       'current_speed': '',
@@ -878,6 +880,7 @@ class ModelTwitchItem(db.Model):
   title = db.Column(db.String)
   category = db.Column(db.String)
   save_files = db.Column(db.String)
+  use_ffmpeg = db.Column(db.Boolean)
   use_segment = db.Column(db.Boolean)
   segment_size = db.Column(db.Integer)
   filesize = db.Column(db.Integer, default=0)
@@ -1019,6 +1022,7 @@ class ModelTwitchItem(db.Model):
     item.title = initial_values['title']
     item.category = initial_values['category']
     item.quality = initial_values['quality']
+    item.use_ffmpeg = initial_values['use_ffmpeg']
     item.use_segment = initial_values['use_segment']
     item.segment_size = initial_values['segment_size']
     item.options = initial_values['options']
@@ -1032,13 +1036,6 @@ class ModelTwitchItem(db.Model):
     if item is None: return
     item.running = download_status['running']
     item.manual_stop = download_status['manual_stop']
-    item.author = download_status['author']
-    item.title = download_status['title']
-    item.category = download_status['category']
-    item.quality = download_status['quality']
-    item.use_segment = download_status['use_segment']
-    item.segment_size = download_status['segment_size']
-    item.options = download_status['options']
     item.save_files = '\n'.join(download_status['save_files'])
     item.filesize = download_status['filesize']
     item.filesize_str = download_status['filesize_str']
