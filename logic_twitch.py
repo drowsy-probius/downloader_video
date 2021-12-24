@@ -562,12 +562,12 @@ class LogicTwitch(LogicModuleBase):
 
       self.set_download_status(streamer_id, {
         'save_files': save_files,
-        'current_speed': current_speed,
+        'current_speed': 'waiting',
         'elapsed_time': 'waiting',
         'start_time': '' if start_time is None else str(start_time).split('.')[0][2:],
         'filesize': filesize,
         'filesize_str': 'waiting',
-        'download_speed': 'waiting',
+        'download_speed': '0',
         'status': 'start'
       })
 
