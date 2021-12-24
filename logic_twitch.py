@@ -547,6 +547,7 @@ class LogicTwitch(LogicModuleBase):
       # chunk_size = 4096 * 1024 # 4k bytes
       chunk_size = P.ModelSetting.get_int('streamlink_chunk_size')
       status_update_interval = 1
+      max_error_count = 3
 
       before_time_for_speed = datetime.now()
       before_bytes_for_speed = 0
@@ -570,7 +571,7 @@ class LogicTwitch(LogicModuleBase):
           with open(save_file, 'wb') as target:
             save_files.append(save_file)
             logger.debug(f'[{streamer_id}] Start to download stream part {part_number}')
-            error_count = 0
+            error_count = 1
             while not self.download_status[streamer_id]['manual_stop']:
               try:
                 stream_data = opened_stream.read(chunk_size)
@@ -580,7 +581,7 @@ class LogicTwitch(LogicModuleBase):
                 logger.error(f'[{streamer_id}] streamlink cannot read chunk. error count {error_count}')
                 logger.error(f'[{streamer_id}] exception: {e}')
                 error_count += 1
-                if error_count > 5:
+                if error_count > max_error_count:
                   logger.error(f'[{streamer_id}] Stopping download stream')
                   self.set_download_status(streamer_id, {
                     'manual_stop': True,
@@ -614,7 +615,7 @@ class LogicTwitch(LogicModuleBase):
         with open(save_file, 'wb') as target:
           save_files.append(save_file)
           logger.debug(f'[{streamer_id}] Start to download stream')
-          error_count = 0
+          error_count = 1
           while not self.download_status[streamer_id]['manual_stop']:
             try:
               stream_data = opened_stream.read(chunk_size)
@@ -624,7 +625,7 @@ class LogicTwitch(LogicModuleBase):
               logger.error(f'[{streamer_id}] streamlink cannot read chunk. error count {error_count}')
               logger.error(f'[{streamer_id}] exception: {e}')
               error_count += 1
-              if error_count > 5:
+              if error_count > max_error_count:
                 logger.error(f'[{streamer_id}] Stopping download stream')
                 self.set_download_status(streamer_id, {
                   'manual_stop': True,
@@ -660,7 +661,7 @@ class LogicTwitch(LogicModuleBase):
       download_speed = Util.sizeof_fmt(filesize/elapsed_time, suffix='B/s')
       self.set_download_status(streamer_id, {
         'running': False,
-        'elapsed_time': elapsed_time,
+        'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
         'download_speed': download_speed,
         'end_time': '' if end_time is None else str(end_time).split('.')[0][5:],
         'status': 'completed',
@@ -896,7 +897,7 @@ class ModelTwitchItem(db.Model):
 
   def as_dict(self):
     ret = {x.name: getattr(self, x.name) for x in self.__table__.columns}
-    ret['created_time'] = self.created_time.strftime('%Y-%m-%d %H:%M')
+    # ret['created_time'] = self.created_time.strftime('%Y-%m-%d %H:%M')
     # ret['start_time'] = self.start_time.strftime('%Y-%m-%d %H:%M')
     # ret['end_time'] = self.end_time.strftime('%Y-%m-%d %H:%M')
     # ret['elapsed_time'] = self.elapsed_time.strftime('%Y-%m-%d %H:%M')
@@ -1009,7 +1010,7 @@ class ModelTwitchItem(db.Model):
   @classmethod
   def insert(cls, streamer_id, initial_values):
     item = ModelTwitchItem()
-    item.created_time = datetime.now()
+    item.created_time = str(datetime.now()).split('.')[0][5:]
     item.streamer_id = streamer_id
     item.running = initial_values['running']
     item.manual_stop = initial_values['manual_stop']
