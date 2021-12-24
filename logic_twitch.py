@@ -555,7 +555,7 @@ class LogicTwitch(LogicModuleBase):
       # chunk_size = 4096 * 1024 # 4k bytes
       chunk_size = P.ModelSetting.get_int('streamlink_chunk_size')
       status_update_interval = 1
-      max_error_count = 3
+      max_error_count = 2
 
       before_time_for_speed = datetime.now()
       before_bytes_for_speed = 0
