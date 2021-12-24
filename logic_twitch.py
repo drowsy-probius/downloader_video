@@ -29,7 +29,7 @@ class LogicTwitch(LogicModuleBase):
     'twitch_db_version': '1',
     'twitch_use_ffmpeg': 'True',
     'twitch_download_path': os.path.join(path_data, P.package_name, 'twitch'),
-    'twitch_filename_format': '[%Y-%m-%d %H:%M][{category}] {title}',
+    'twitch_filename_format': '[%y%m%d %H:%M][{category}] {title}',
     'twitch_directory_name_format': '{author} ({streamer_id})/%y%m',
     'twitch_file_use_segment': 'False',
     'twitch_file_segment_size': '60',
