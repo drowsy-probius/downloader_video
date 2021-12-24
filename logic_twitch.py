@@ -166,7 +166,7 @@ class LogicTwitch(LogicModuleBase):
     before_streamer_ids = [sid for sid in self.download_status]
     old_streamer_ids = [sid for sid in before_streamer_ids if sid not in streamer_ids]
     new_streamer_ids = [sid for sid in streamer_ids if sid not in before_streamer_ids]
-    existing_streamer_ids [sid for sid in streamer_ids if sid in before_streamer_ids]
+    existing_streamer_ids = [sid for sid in streamer_ids if sid in before_streamer_ids]
     for streamer_id in old_streamer_ids: 
       if self.download_status[streamer_id]['running']:
         # keep current download session until reboot
