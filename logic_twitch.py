@@ -230,7 +230,7 @@ class LogicTwitch(LogicModuleBase):
         import framework.common.util as CommonUtil
         commands = [['msg', u'잠시만 기다려주세요.']]
         if app.config['config']['is_py2']:
-          command.append(['echo', 'python2 이하는 지원하지 않습니다.'])
+          commands.append(['echo', 'python2 이하는 지원하지 않습니다.'])
         else:
           commands.append([sys.executable, '-m', 'pip', 'install', '--upgrade', 'pip'])
           commands.append([sys.executable, '-m', 'pip', 'install', '--upgrade', 'streamlink'])
