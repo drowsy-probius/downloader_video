@@ -261,7 +261,8 @@ class LogicTwitch(LogicModuleBase):
     '''
     return True if stream exists and streaming id is not None
     '''
-    return len(self.get_streams(streamer_id)) > 0 and self.get_metadata(streamer_id)['id'] is not None
+    metadata = self.get_metadata(streamer_id)
+    return len(self.get_streams(streamer_id)) > 0 and len([i for i in metadata if metadata[i] is None]) == 0
 
 
   def get_metadata(self, streamer_id):
@@ -496,6 +497,9 @@ class LogicTwitch(LogicModuleBase):
 
   def download_thread_function(self, streamer_id):
     metadata = self.get_metadata(streamer_id)
+    while metadata['author'] is None:
+      metadata = self.get_metadata(streamer_id)
+
     (quality, stream) = self.select_stream(streamer_id)
     self.set_download_status(streamer_id, {
       'online': True,
@@ -927,9 +931,6 @@ class ModelTwitchItem(db.Model):
   def as_dict(self):
     import collections 
     ret = {x.name: getattr(self, x.name) for x in self.__table__.columns}
-    logger.debug(self.title)
-    logger.debug(type(self.title))
-    logger.debug(self.category)
     ret['title'] = json.loads(self.title, object_pairs_hook=collections.OrderedDict)
     ret['category'] = json.loads(self.category, object_pairs_hook=collections.OrderedDict)
     ret['save_files'] = json.loads(self.save_files, object_pairs_hook=collections.OrderedDict)
