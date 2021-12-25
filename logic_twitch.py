@@ -59,8 +59,8 @@ class LogicTwitch(LogicModuleBase):
     'manual_stop': bool,
     'online': bool,
     'author': str,
-    'title': str,
-    'category': str,
+    'title': [],
+    'category': [],
     'url': str,
     'filepath': str, // 파일 저장 절대 경로
     'filename': str, // {part_number} 교체하기 전 이름
@@ -277,6 +277,18 @@ class LogicTwitch(LogicModuleBase):
     return streamlink_plugin.get_metadata()
 
 
+  def update_metadata(self, streamer_id):
+    if not self.download_status[streamer_id]['running']:
+      return
+    metadata = self.get_metadata(streamer_id)
+    if self.download_status[streamer_id]['title'][-1] != metadata['title'] or \
+      self.download_status[streamer_id]['category'][-1] != metadata['category']:
+      self.set_download_status(streamer_id, {
+        'title': self.download_status[streamer_id]['title'] + [metadata['title']],
+        'category': self.download_status[streamer_id]['category'] + [metadata['category']],
+      })
+
+
   def get_streams(self, streamer_id):
     '''
     returns {qualities: urls} 
@@ -336,7 +348,7 @@ class LogicTwitch(LogicModuleBase):
     return (result_quality, result_stream)
 
 
-  def get_options(self, toString=False):
+  def get_options(self):
     '''
     returns [(option1), (option2), ...]
     '''
@@ -347,14 +359,12 @@ class LogicTwitch(LogicModuleBase):
     streamlink_twitch_low_latency = P.ModelSetting.get_bool('streamlink_twitch_low_latency')
     streamlink_hls_live_edge = P.ModelSetting.get_int('streamlink_hls_live_edge')
     options = options + [
-      ('twitch', 'disable-ads', streamlink_twitch_disable_ads),
-      ('twitch', 'disable-hosting', streamlink_twitch_disable_hosting),
-      ('twitch', 'disable-reruns', streamlink_twitch_disable_reruns),
-      ('twitch', 'low-latency', streamlink_twitch_low_latency),
-      ('hls-live-edge', streamlink_hls_live_edge),
+      ['twitch', 'disable-ads', streamlink_twitch_disable_ads],
+      ['twitch', 'disable-hosting', streamlink_twitch_disable_hosting],
+      ['twitch', 'disable-reruns', streamlink_twitch_disable_reruns],
+      ['twitch', 'low-latency', streamlink_twitch_low_latency],
+      ['hls-live-edge', streamlink_hls_live_edge],
     ]
-    if toString:
-      return '\n'.join([' '.join([str(j) for j in i]) for i in options])
     return options
 
 
@@ -419,8 +429,8 @@ class LogicTwitch(LogicModuleBase):
     result = format_str
     result = result.replace('{streamer_id}', streamer_id)
     result = result.replace('{author}', self.download_status[streamer_id]['author'])
-    result = result.replace('{title}', self.download_status[streamer_id]['title'])
-    result = result.replace('{category}', self.download_status[streamer_id]['category'])
+    result = result.replace('{title}', self.download_status[streamer_id]['title'][0])
+    result = result.replace('{category}', self.download_status[streamer_id]['category'][0])
     result = result.replace('{quality}', self.download_status[streamer_id]['quality'])
     result = datetime.now().strftime(result)
     result = self.replace_unavailable_characters_in_filename(result)
@@ -461,8 +471,8 @@ class LogicTwitch(LogicModuleBase):
       'manual_stop': False,
       'online': False,
       'author': 'No Author',
-      'title': 'No Title',
-      'category': 'No Category',
+      'title': [],
+      'category': [],
       'url': '',
       'filepath': '',
       'filename': '',
@@ -491,11 +501,11 @@ class LogicTwitch(LogicModuleBase):
       'online': True,
       'manual_stop': False,
       'author': metadata['author'],
-      'title': metadata['title'],
-      'category': metadata['category'],
+      'title': [metadata['title']],
+      'category': [metadata['category']],
       'quality': quality,
       'url': stream.url,
-      'options': self.get_options(toString=True),
+      'options': self.get_options(),
       'use_ffmpeg': P.ModelSetting.get_bool('twitch_use_ffmpeg'),
       'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
       'segment_size': P.ModelSetting.get_int('twitch_file_segment_size'),
@@ -615,6 +625,11 @@ class LogicTwitch(LogicModuleBase):
                   'filesize_str': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
                   'download_speed': '',
                 })
+
+              # update_metadata
+              if int(datetime.now().minute) % 15 == 0 and int(datetime.now().second) < 2:
+                self.update_metadata(streamer_id)
+
               # next part_number
               if elapsed_time / 60 > (part_number * segment_size):
                 break
@@ -659,6 +674,10 @@ class LogicTwitch(LogicModuleBase):
                 'filesize_str': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
                 'download_speed': '',
               })
+
+            if int(datetime.now().minute) % 15 == 0 and int(datetime.now().second) < 2:
+              self.update_metadata(streamer_id)
+
           target.close()
       
       opened_stream.close()
@@ -725,6 +744,9 @@ class LogicTwitch(LogicModuleBase):
         # line = line.strip()
         # logger.debug(line)
         try:
+          if int(datetime.now().minute) % 15 == 0 and int(datetime.now().second) < 2:
+            self.update_metadata(streamer_id)
+
           if re.compile(r"video:(?P<videosize>\S*)\s*audio:(?P<audiosize>\S*)\s*subtitle:(?P<subsize>\S*)\s*other streams:(?P<streamsize>\S*)\s*global headers:(?P<headersize>\S*)").search(line):
             match = re.compile(r"video:(?P<videosize>\S*)\s*audio:(?P<audiosize>\S*)\s*subtitle:(?P<subsize>\S*)\s*other streams:(?P<streamsize>\S*)\s*global headers:(?P<headersize>\S*)").search(line)
             videosize = str_to_bytes(match.group('videosize'))
@@ -907,7 +929,15 @@ class ModelTwitchItem(db.Model):
     return repr(self.as_dict())
 
   def as_dict(self):
+    import collections 
     ret = {x.name: getattr(self, x.name) for x in self.__table__.columns}
+    logger.debug(self.title)
+    logger.debug(type(self.title))
+    logger.debug(self.category)
+    ret['title'] = json.loads(self.title, object_pairs_hook=collections.OrderedDict)
+    ret['category'] = json.loads(self.category, object_pairs_hook=collections.OrderedDict)
+    ret['save_files'] = json.loads(self.save_files, object_pairs_hook=collections.OrderedDict)
+    ret['options'] = json.loads(self.options, object_pairs_hook=collections.OrderedDict)
     # ret['created_time'] = self.created_time.strftime('%Y-%m-%d %H:%M')
     # ret['start_time'] = self.start_time.strftime('%Y-%m-%d %H:%M')
     # ret['end_time'] = self.end_time.strftime('%Y-%m-%d %H:%M')
@@ -952,28 +982,24 @@ class ModelTwitchItem(db.Model):
 
   @classmethod
   def make_query(cls, search='', order='desc', option='all'):
-    query = db.session.query(cls)
+    query = db.session.query(ModelTwitchItem)
     conditions = []
 
+    search = search.strip()
     if search is not None and search != '':
       if search.find('|') != -1:
         tmp = search.split('|')
         for tt in tmp:
           if tt != '':
-            conditions.append(cls.title.like('%'+tt.strip()+'%') )
-            conditions.append(cls.author.like('%'+tt.strip()+'%') )
-            conditions.append(cls.category.like('%'+tt.strip()+'%') )
-      elif search.find(',') != -1:
-        tmp = search.split(',')
-        for tt in tmp:
-          if tt != '':
-            conditions.append(cls.title.like('%'+tt.strip()+'%') )
-            conditions.append(cls.author.like('%'+tt.strip()+'%') )
-            conditions.append(cls.category.like('%'+tt.strip()+'%') )
-      else:
-        conditions.append(cls.title.like('%'+search+'%') )
-        conditions.append(cls.author.like('%'+search+'%') )
-        conditions.append(cls.category.like('%'+search+'%') )
+            search_key = f'%{tt.strip()}%'
+            conditions.append(cls.title.like(search_key))
+            conditions.append(cls.author.like(search_key))
+            conditions.append(cls.category.like(search_key))
+      
+      search_key = f'%{search}%'
+      conditions.append(cls.title.like(search_key) )
+      conditions.append(cls.author.like(search_key) )
+      conditions.append(cls.category.like(search_key) )
       query = query.filter(or_(*conditions))
     
     if option != 'all':
@@ -1026,13 +1052,14 @@ class ModelTwitchItem(db.Model):
     item.running = initial_values['running']
     item.manual_stop = initial_values['manual_stop']
     item.author = initial_values['author']
-    item.title = initial_values['title']
-    item.category = initial_values['category']
+    item.title = json.dumps(initial_values['title'], ensure_ascii=False, sort_keys=False)
+    # encure_ascii=False 안하면 유니코드로 저장이 됨.
+    item.category = json.dumps(initial_values['category'], ensure_ascii=False, sort_keys=False)
     item.quality = initial_values['quality']
     item.use_ffmpeg = initial_values['use_ffmpeg']
     item.use_segment = initial_values['use_segment']
     item.segment_size = initial_values['segment_size']
-    item.options = initial_values['options']
+    item.options = json.dumps(initial_values['options'], ensure_ascii=False, sort_keys=False)
     item.save()
     return item.id
 
@@ -1043,7 +1070,9 @@ class ModelTwitchItem(db.Model):
     if item is None: return
     item.running = download_status['running']
     item.manual_stop = download_status['manual_stop']
-    item.save_files = '\n'.join(download_status['save_files'])
+    item.title = json.dumps(download_status['title'], ensure_ascii=False, sort_keys=False)
+    item.category = json.dumps(download_status['category'], ensure_ascii=False, sort_keys=False)
+    item.save_files = json.dumps(download_status['save_files'], ensure_ascii=False, sort_keys=False)
     item.filesize = download_status['filesize']
     item.filesize_str = download_status['filesize_str']
     item.download_speed = download_status['download_speed']

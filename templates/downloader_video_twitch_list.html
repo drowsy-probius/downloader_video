@@ -73,9 +73,6 @@ $("body").on('click', '#json_btn', function(e){
   for (i in current_data.list) {
     if (current_data.list[i].id == id) {
       json_data = JSON.parse(JSON.stringify(current_data.list[i])) // deep copy
-      json_data.save_files = json_data.save_files.split('\n');
-      json_data.filesize = json_data.filesize;
-      json_data.options = json_data.options.split('\n'); 
       m_modal(json_data)
     }
   }
@@ -159,7 +156,7 @@ function make_list(data) {
     str += m_row_start();
     str += m_col(2, `${data[i].created_time}`)
     str += m_col(2, `${data[i].author}<br>(${data[i].streamer_id})`)
-    tmp = `${data[i].title}<br>${data[i].category}<br>화질: ${data[i].quality}`
+    tmp = `${data[i].title[0]}<br>${data[i].category[0]}<br>화질: ${data[i].quality}`
     str += m_col(3, tmp)
 
     tmp = `크기: ${data[i].filesize_str}, 경과: ${data[i].elapsed_time} ${data[i].running ? '(다운로드 중)' : '(완료)'}`
