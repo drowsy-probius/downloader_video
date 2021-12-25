@@ -496,58 +496,62 @@ class LogicTwitch(LogicModuleBase):
 
 
   def download_thread_function(self, streamer_id):
-    metadata = self.get_metadata(streamer_id)
-    while metadata['author'] is None:
+    try:
       metadata = self.get_metadata(streamer_id)
+      while metadata['author'] is None:
+        metadata = self.get_metadata(streamer_id)
 
-    (quality, stream) = self.select_stream(streamer_id)
-    self.set_download_status(streamer_id, {
-      'online': True,
-      'manual_stop': False,
-      'author': metadata['author'],
-      'title': [metadata['title']],
-      'category': [metadata['category']],
-      'quality': quality,
-      'url': stream.url,
-      'options': self.get_options(),
-      'use_ffmpeg': P.ModelSetting.get_bool('twitch_use_ffmpeg'),
-      'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
-      'segment_size': P.ModelSetting.get_int('twitch_file_segment_size'),
-    })
-    # mkdir
-    self.set_filepath(streamer_id)
-    filename = self.parse_string_from_format(streamer_id, P.ModelSetting.get('twitch_filename_format'))
-    db_id = ModelTwitchItem.insert(streamer_id, self.download_status[streamer_id])
-    self.set_download_status(streamer_id, {
-      'db_id': db_id,
-      'filename': filename,
-    })
+      (quality, stream) = self.select_stream(streamer_id)
+      self.set_download_status(streamer_id, {
+        'online': True,
+        'manual_stop': False,
+        'author': metadata['author'],
+        'title': [metadata['title']],
+        'category': [metadata['category']],
+        'quality': quality,
+        'url': stream.url,
+        'options': self.get_options(),
+        'use_ffmpeg': P.ModelSetting.get_bool('twitch_use_ffmpeg'),
+        'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
+        'segment_size': P.ModelSetting.get_int('twitch_file_segment_size'),
+      })
+      # mkdir
+      self.set_filepath(streamer_id)
+      filename = self.parse_string_from_format(streamer_id, P.ModelSetting.get('twitch_filename_format'))
+      db_id = ModelTwitchItem.insert(streamer_id, self.download_status[streamer_id])
+      self.set_download_status(streamer_id, {
+        'db_id': db_id,
+        'filename': filename,
+      })
 
-    save_format = self.download_status[streamer_id]['filename']
-    if self.download_status[streamer_id]['use_segment']:
-      if '{part_number}' in save_format:
-        save_format = save_format.replace('{part_number}', '%02d')
+      save_format = self.download_status[streamer_id]['filename']
+      if self.download_status[streamer_id]['use_segment']:
+        if '{part_number}' in save_format:
+          save_format = save_format.replace('{part_number}', '%02d')
+        else:
+          save_format = save_format + ' part%02d'
       else:
-        save_format = save_format + ' part%02d'
-    else:
-      if '{part_number}' in save_format:
-        save_format = save_format.replace('{part_number}', '')
-    if self.download_status[streamer_id]['quality'] == 'audio_only':
-      save_format = save_format + '.aac'
-    else:
-      save_format = save_format + '.ts'
-    save_format = os.path.join(self.download_status[streamer_id]['filepath'], save_format)
-    self.set_download_status(streamer_id, {
-      'save_format': save_format,
-    })
+        if '{part_number}' in save_format:
+          save_format = save_format.replace('{part_number}', '')
+      if self.download_status[streamer_id]['quality'] == 'audio_only':
+        save_format = save_format + '.aac'
+      else:
+        save_format = save_format + '.ts'
+      save_format = os.path.join(self.download_status[streamer_id]['filepath'], save_format)
+      self.set_download_status(streamer_id, {
+        'save_format': save_format,
+      })
 
-    logger.debug(f'[{streamer_id}] start to download stream: use_ffmpeg={P.ModelSetting.get_bool("twitch_use_ffmpeg")} use_segment={self.download_status[streamer_id]["use_segment"]}')
-    if P.ModelSetting.get_bool('twitch_use_ffmpeg'):
-      self.download_stream_ffmpeg(streamer_id)
-    else:
-      self.download_stream(streamer_id, stream)
-    if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
-      del self.download_status[streamer_id]
+      logger.debug(f'[{streamer_id}] start to download stream: use_ffmpeg={P.ModelSetting.get_bool("twitch_use_ffmpeg")} use_segment={self.download_status[streamer_id]["use_segment"]}')
+      if P.ModelSetting.get_bool('twitch_use_ffmpeg'):
+        self.download_stream_ffmpeg(streamer_id)
+      else:
+        self.download_stream(streamer_id, stream)
+      if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
+        del self.download_status[streamer_id]
+    except Exception as e:
+      logger.error(f'Exception: {e}')
+      logger.error(traceback.format_exc())
   
 
   def download_stream(self, streamer_id, stream):
