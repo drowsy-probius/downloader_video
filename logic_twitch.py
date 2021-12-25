@@ -169,8 +169,7 @@ class LogicTwitch(LogicModuleBase):
     existing_streamer_ids = [sid for sid in streamer_ids if sid in before_streamer_ids]
     for streamer_id in old_streamer_ids: 
       if self.download_status[streamer_id]['running']:
-        # keep current download session until reboot
-        self.set_download_status(streamer_id, {'enable': False})
+        self.set_download_status(streamer_id, {'enable': False, 'manual_stop': True})
       else:
         del self.download_status[streamer_id]
     for streamer_id in new_streamer_ids:
@@ -528,11 +527,13 @@ class LogicTwitch(LogicModuleBase):
       'save_format': save_format,
     })
 
-    logger.debug(f'[{streamer_id}] start to download')
+    logger.debug(f'[{streamer_id}] start to download stream: use_ffmpeg={P.ModelSetting.get_bool("twitch_use_ffmpeg")} use_segment={self.download_status[streamer_id]["use_segment"]}')
     if P.ModelSetting.get_bool('twitch_use_ffmpeg'):
       self.download_stream_ffmpeg(streamer_id)
     else:
       self.download_stream(streamer_id, stream)
+    if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
+      del self.download_status[streamer_id]
   
 
   def download_stream(self, streamer_id, stream):
@@ -578,7 +579,7 @@ class LogicTwitch(LogicModuleBase):
           save_file = save_format % part_number
           with open(save_file, 'wb') as target:
             save_files.append(save_file)
-            logger.debug(f'[{streamer_id}] Start to download stream part {part_number}')
+            logger.debug(f'[{streamer_id}] Start to download stream part{part_number}')
             error_count = 1
             while not self.download_status[streamer_id]['manual_stop']:
               try:
@@ -622,7 +623,7 @@ class LogicTwitch(LogicModuleBase):
         save_file = save_format
         with open(save_file, 'wb') as target:
           save_files.append(save_file)
-          logger.debug(f'[{streamer_id}] Start to download stream')
+          # logger.debug(f'[{streamer_id}] Start to download stream, use_segment={use_segment}')
           error_count = 1
           while not self.download_status[streamer_id]['manual_stop']:
             try:
@@ -836,6 +837,7 @@ class LogicTwitch(LogicModuleBase):
         'save_files': [save_format],
       })
 
+    # logger.debug(f'[{streamer_id}] start to download stream using ffmpeg, use_segment={use_segment}')
     streamlink_process = subprocess.Popen(streamlink_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     process = subprocess.Popen(ffmpeg_command, stdin=streamlink_process.stdout ,stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, encoding='utf8')
 
