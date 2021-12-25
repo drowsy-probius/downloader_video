@@ -723,16 +723,6 @@ class LogicTwitch(LogicModuleBase):
     quality, {part_number}가 %02d로 치환된 filename가 설정 되어 있어야 함.
     이거는 subprocess로 실행하고 로그 가져오기
     '''
-    # https://github.com/streamlink/streamlink/discussions/3749
-    # streamlink -O URL QUALITY [--session_options] | ffmpeg -i pipe:0 -c:v copy -c:a copy -f matroska -y file.mkv
-    # streamlink -O https://www.twitch.tv/jungtaejune best | ffmpeg -i pipe:0 -c:v copy -c:a copy test.mp4
-    # ffmpeg -i "http://iaa.flashmediacast.com:2387/live//radio-93-3/playlist.m3u8" -acodec mp3 ?-ab 129k?이거 필요? radio.mp3
-    # segment_time 단위는 초임
-    # streamlink -O https://www.twitch.tv/jungtaejune best | ffmpeg -i pipe:0 -c:v copy -c:a copy -f segment -segment_time 120 -reset_timestamps 1 output_%03d.mp4
-    # 다운로드 중 log는 다음과 같음
-    # frame=  360 fps= 62 q=-1.0 size=N/A time=00:00:05.99 bitrate=N/A speed=1.03x
-    # plugin/ffmpeg/interface_program_ffmpeg.py line:309 참고
-    # segment 시작 부분은 [segment @ 0x559d4934d2c0] Opening 'output_000.mp4' for writing
     def ffmpeg_log_thread(process, streamlink_process):
       def str_to_bytes(text):
         result = 0
@@ -944,10 +934,6 @@ class ModelTwitchItem(db.Model):
     ret['category'] = json.loads(self.category, object_pairs_hook=collections.OrderedDict)
     ret['save_files'] = json.loads(self.save_files, object_pairs_hook=collections.OrderedDict)
     ret['options'] = json.loads(self.options, object_pairs_hook=collections.OrderedDict)
-    # ret['created_time'] = self.created_time.strftime('%Y-%m-%d %H:%M')
-    # ret['start_time'] = self.start_time.strftime('%Y-%m-%d %H:%M')
-    # ret['end_time'] = self.end_time.strftime('%Y-%m-%d %H:%M')
-    # ret['elapsed_time'] = self.elapsed_time.strftime('%Y-%m-%d %H:%M')
     return ret
 
   def save(self):
@@ -1059,7 +1045,7 @@ class ModelTwitchItem(db.Model):
     item.manual_stop = initial_values['manual_stop']
     item.author = initial_values['author']
     item.title = json.dumps(initial_values['title'], ensure_ascii=False, sort_keys=False)
-    # encure_ascii=False 안하면 유니코드로 저장이 됨.
+    # encure_ascii=False 안하면 유니코드로 저장이 되어서 한글 검색이 안됨.
     item.category = json.dumps(initial_values['category'], ensure_ascii=False, sort_keys=False)
     item.quality = initial_values['quality']
     item.use_ffmpeg = initial_values['use_ffmpeg']
