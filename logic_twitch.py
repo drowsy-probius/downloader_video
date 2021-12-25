@@ -582,6 +582,7 @@ class LogicTwitch(LogicModuleBase):
         'status': 'start'
       })
 
+      metadata_last_check_time = datetime.now()
       if use_segment:
         part_number = 0
         while not self.download_status[streamer_id]['manual_stop']:
@@ -627,7 +628,8 @@ class LogicTwitch(LogicModuleBase):
                 })
 
               # update_metadata
-              if int(datetime.now().minute) % 15 == 0 and int(datetime.now().second) < 2:
+              if (datetime.now() - metadata_last_check_time).total_seconds() > 1800:
+                metadata_last_check_time = datetime.now()
                 self.update_metadata(streamer_id)
 
               # next part_number
@@ -675,7 +677,9 @@ class LogicTwitch(LogicModuleBase):
                 'download_speed': '',
               })
 
-            if int(datetime.now().minute) % 15 == 0 and int(datetime.now().second) < 2:
+            # update_metadata
+            if (datetime.now() - metadata_last_check_time).total_seconds() > 1800:
+              metadata_last_check_time = datetime.now()
               self.update_metadata(streamer_id)
 
           target.close()
@@ -740,11 +744,13 @@ class LogicTwitch(LogicModuleBase):
           result = result * 1024 * 1024
         return result
 
+      metadata_last_check_time = datetime.now()
       for line in iter(process.stdout.readline, ''):
         # line = line.strip()
         # logger.debug(line)
         try:
-          if int(datetime.now().minute) % 15 == 0 and int(datetime.now().second) < 2:
+          if (datetime.now() - metadata_last_check_time).total_seconds() > 1800:
+            metadata_last_check_time = datetime.now()
             self.update_metadata(streamer_id)
 
           if re.compile(r"video:(?P<videosize>\S*)\s*audio:(?P<audiosize>\S*)\s*subtitle:(?P<subsize>\S*)\s*other streams:(?P<streamsize>\S*)\s*global headers:(?P<headersize>\S*)").search(line):
