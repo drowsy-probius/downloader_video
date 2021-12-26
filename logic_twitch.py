@@ -534,9 +534,9 @@ class LogicTwitch(LogicModuleBase):
         if '{part_number}' in save_format:
           save_format = save_format.replace('{part_number}', '')
       if self.download_status[streamer_id]['quality'] == 'audio_only':
-        save_format = save_format + '.aac'
+        save_format = save_format + '.mp4'
       else:
-        save_format = save_format + '.ts'
+        save_format = save_format + '.mp3'
       save_format = os.path.join(self.download_status[streamer_id]['filepath'], save_format)
       self.set_download_status(streamer_id, {
         'save_format': save_format,
