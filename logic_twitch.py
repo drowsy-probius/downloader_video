@@ -27,9 +27,9 @@ ModelSetting = P.ModelSetting
 class LogicTwitch(LogicModuleBase):
   db_default = {
     'twitch_db_version': '1',
-    'twitch_use_ffmpeg': 'True',
     'twitch_download_path': os.path.join(path_data, P.package_name, 'twitch'),
     'twitch_filename_format': '[%y%m%d %H:%M][{category}] {title}',
+    'twitch_use_ts': 'True',
     'twitch_directory_name_format': '{author} ({streamer_id})/%y%m',
     'twitch_file_use_segment': 'False',
     'twitch_file_segment_size': '60',
@@ -45,7 +45,6 @@ class LogicTwitch(LogicModuleBase):
     'streamlink_twitch_disable_reruns': 'True',
     'streamlink_twitch_low_latency': 'True',
     'streamlink_hls_live_edge': '2',
-    'streamlink_chunk_size': '4096', # 4KB
     'streamlink_options': 'False', # html 토글 위한 쓰레기 값임.
   }
   is_streamlink_installed = False
@@ -67,7 +66,7 @@ class LogicTwitch(LogicModuleBase):
     'save_format': str, // segment 사용할 때 part_number가 %02d로 교체된 파일명의 full path
     'save_files: [],  // {part_number} 교체한 후 이름 목록
     'quality': str,
-    'use_ffmpeg': bool,
+    'use_ts': bool,
     'use_segment': bool,
     'segment_size': int,
     'current_speed': str,
@@ -98,14 +97,13 @@ class LogicTwitch(LogicModuleBase):
         arg['is_running'] = str(scheduler.is_running(job_id))
         arg['is_streamlink_installed'] = self.is_streamlink_installed
         arg['streamlink_version'] = self.get_streamlink_version()
-        if P.ModelSetting.get_bool('twitch_use_ffmpeg'):
+        try:
           from ffmpeg.model import ModelSetting as FfmpegModelSetting
           import subprocess
           ffmpeg_path = FfmpegModelSetting.get('ffmpeg_path')
-          try:
-            arg['ffmpeg_version'] = subprocess.check_output([ffmpeg_path, '-version'], shell=False).decode('utf8').splitlines()[0]
-          except:
-            arg['ffmpeg_version'] = 'Not Installed'
+          arg['ffmpeg_version'] = subprocess.check_output([ffmpeg_path, '-version'], shell=False).decode('utf8').splitlines()[0]
+        except:
+          arg['ffmpeg_version'] = 'Not Installed'
       return render_template(f'{P.package_name}_{self.name}_{sub}.html', arg=arg)
     return render_template('sample.html', title=f'404: {P.package_name} - {sub}')
 
@@ -151,7 +149,7 @@ class LogicTwitch(LogicModuleBase):
         if delete_file:
           save_files = ModelTwitchItem.get_file_list_by_id(db_id)
           for save_file in save_files:
-            if os.path.exists(save_file) and os.path.isfile(save_file):
+            if os.path.exists(save_file):
               shutil_task.remove(save_file)
         db_return = ModelTwitchItem.delete_by_id(db_id)
         return jsonify({'ret': db_return})
@@ -480,7 +478,7 @@ class LogicTwitch(LogicModuleBase):
       'save_format': '',
       'save_files': [],
       'quality': '',
-      'use_ffmpeg': P.ModelSetting.get_bool('twitch_use_ffmpeg'),
+      'use_ts': P.ModelSetting.get_bool('twitch_use_ts'),
       'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
       'segment_size': P.ModelSetting.get_int('twitch_file_segment_size'),
       'current_speed': '',
@@ -511,7 +509,7 @@ class LogicTwitch(LogicModuleBase):
         'quality': quality,
         'url': stream.url,
         'options': self.get_options(),
-        'use_ffmpeg': P.ModelSetting.get_bool('twitch_use_ffmpeg'),
+        'use_ts': P.ModelSetting.get_bool('twitch_use_ts'),
         'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
         'segment_size': P.ModelSetting.get_int('twitch_file_segment_size'),
       })
@@ -525,6 +523,7 @@ class LogicTwitch(LogicModuleBase):
       })
 
       save_format = self.download_status[streamer_id]['filename']
+      use_ts = self.download_status[streamer_id]['use_ts']
       if self.download_status[streamer_id]['use_segment']:
         if '{part_number}' in save_format:
           save_format = save_format.replace('{part_number}', '%02d')
@@ -534,192 +533,24 @@ class LogicTwitch(LogicModuleBase):
         if '{part_number}' in save_format:
           save_format = save_format.replace('{part_number}', '')
       if self.download_status[streamer_id]['quality'] == 'audio_only':
-        save_format = save_format + '.aac'
+        if use_ts:
+          save_format = save_format + '.aac'
+        else:
+          save_format = save_format + '.mp3'
       else:
-        save_format = save_format + '.ts'
+        if use_ts:
+          save_format = save_format + '.ts'
+        else:
+          save_format = save_format + '.mp4'
       save_format = os.path.join(self.download_status[streamer_id]['filepath'], save_format)
       self.set_download_status(streamer_id, {
         'save_format': save_format,
       })
 
-      logger.debug(f'[{streamer_id}] start to download stream: use_ffmpeg={P.ModelSetting.get_bool("twitch_use_ffmpeg")} use_segment={self.download_status[streamer_id]["use_segment"]}')
-      if P.ModelSetting.get_bool('twitch_use_ffmpeg'):
-        self.download_stream_ffmpeg(streamer_id)
-      else:
-        self.download_stream(streamer_id, stream)
+      logger.debug(f'[{streamer_id}] start to download stream: use_segment={self.download_status[streamer_id]["use_segment"]} use_ts={use_ts}')
+      self.download_stream_ffmpeg(streamer_id)
       if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
         del self.download_status[streamer_id]
-    except Exception as e:
-      logger.error(f'Exception: {e}')
-      logger.error(traceback.format_exc())
-  
-
-  def download_stream(self, streamer_id, stream):
-    try:
-      opened_stream = stream.open()
-
-      use_segment = self.download_status[streamer_id]['use_segment']
-      segment_size = self.download_status[streamer_id]['segment_size']
-      save_format = self.download_status[streamer_id]['save_format']
-      save_files = []
-
-      current_speed = 0
-      elapsed_time = 0
-      start_time = datetime.now()
-      end_time = None
-      filesize = 0
-      download_speed = ''
-
-      # 다운로드와 관련된 값 선언
-      # chunk_size = 4096 * 1024 # 4k bytes
-      chunk_size = P.ModelSetting.get_int('streamlink_chunk_size')
-      status_update_interval = 1
-      max_error_count = 2
-
-      before_time_for_speed = datetime.now()
-      before_bytes_for_speed = 0
-
-      self.set_download_status(streamer_id, {
-        'save_files': save_files,
-        'current_speed': 'waiting',
-        'elapsed_time': 'waiting',
-        'start_time': '' if start_time is None else str(start_time).split('.')[0][2:],
-        'filesize': filesize,
-        'filesize_str': 'waiting',
-        'download_speed': '0',
-        'status': 'start'
-      })
-
-      metadata_last_check_time = datetime.now()
-      if use_segment:
-        part_number = 0
-        while not self.download_status[streamer_id]['manual_stop']:
-          part_number += 1
-          save_file = save_format % part_number
-          with open(save_file, 'wb') as target:
-            save_files.append(save_file)
-            logger.debug(f'[{streamer_id}] Start to download stream part{part_number}')
-            error_count = 1
-            while not self.download_status[streamer_id]['manual_stop']:
-              try:
-                stream_data = opened_stream.read(chunk_size)
-                filesize += len(stream_data)
-                target.write(stream_data)
-              except Exception as e:
-                logger.error(f'[{streamer_id}] streamlink cannot read chunk. error count {error_count}')
-                logger.error(f'[{streamer_id}] exception: {e}')
-                error_count += 1
-                if error_count > max_error_count:
-                  logger.error(f'[{streamer_id}] Stopping download stream')
-                  self.set_download_status(streamer_id, {
-                    'manual_stop': True,
-                    'status': 'cannot read chunk',
-                  })
-                  break
-              
-              elapsed_time = (datetime.now() - start_time).total_seconds()
-              time_diff = (datetime.now() - before_time_for_speed).total_seconds()
-              if time_diff > status_update_interval:
-                byte_diff = filesize - before_bytes_for_speed
-                before_time_for_speed = datetime.now()
-                before_bytes_for_speed = filesize 
-                current_speed = Util.sizeof_fmt(byte_diff/time_diff, suffix='B/s')
-                download_speed = Util.sizeof_fmt(filesize/elapsed_time, suffix='B/s')
-                self.set_download_status(streamer_id, {
-                  'save_files': save_files,
-                  'current_speed': current_speed,
-                  'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
-                  'start_time': '' if start_time is None else str(start_time).split('.')[0][2:],
-                  'filesize': filesize,
-                  'filesize_str': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
-                  'download_speed': '',
-                })
-
-              # update_metadata
-              if (datetime.now() - metadata_last_check_time).total_seconds() > 1800:
-                metadata_last_check_time = datetime.now()
-                self.update_metadata(streamer_id)
-
-              # next part_number
-              if elapsed_time / 60 > (part_number * segment_size):
-                break
-            target.close()
-      else:
-        save_file = save_format
-        with open(save_file, 'wb') as target:
-          save_files.append(save_file)
-          # logger.debug(f'[{streamer_id}] Start to download stream, use_segment={use_segment}')
-          error_count = 1
-          while not self.download_status[streamer_id]['manual_stop']:
-            try:
-              stream_data = opened_stream.read(chunk_size)
-              filesize += len(stream_data)
-              target.write(stream_data)
-            except Exception as e:
-              logger.error(f'[{streamer_id}] streamlink cannot read chunk. error count {error_count}')
-              logger.error(f'[{streamer_id}] exception: {e}')
-              error_count += 1
-              if error_count > max_error_count:
-                logger.error(f'[{streamer_id}] Stopping download stream')
-                self.set_download_status(streamer_id, {
-                  'manual_stop': True,
-                  'status': 'cannot read chunk',
-                })
-                break
-            
-            elapsed_time = (datetime.now() - start_time).total_seconds()
-            time_diff = (datetime.now() - before_time_for_speed).total_seconds()
-            if time_diff > status_update_interval:
-              byte_diff = filesize - before_bytes_for_speed
-              before_time_for_speed = datetime.now()
-              before_bytes_for_speed = filesize 
-              current_speed = Util.sizeof_fmt(byte_diff/time_diff, suffix='B/s')
-              download_speed = Util.sizeof_fmt(filesize/elapsed_time, suffix='B/s')
-              self.set_download_status(streamer_id, {
-                'save_files': save_files,
-                'current_speed': current_speed,
-                'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
-                'start_time': '' if start_time is None else str(start_time).split('.')[0][2:],
-                'filesize': filesize,
-                'filesize_str': '' if filesize is None else Util.sizeof_fmt(filesize, suffix='B'),
-                'download_speed': '',
-              })
-
-            # update_metadata
-            if (datetime.now() - metadata_last_check_time).total_seconds() > 1800:
-              metadata_last_check_time = datetime.now()
-              self.update_metadata(streamer_id)
-
-          target.close()
-      
-      opened_stream.close()
-      del opened_stream
-      del stream 
-
-      end_time = datetime.now()
-      elapsed_time = (end_time - start_time).total_seconds()
-      download_speed = Util.sizeof_fmt(filesize/elapsed_time, suffix='B/s')
-      self.set_download_status(streamer_id, {
-        'running': False,
-        'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
-        'download_speed': download_speed,
-        'end_time': '' if end_time is None else str(end_time).split('.')[0][2:],
-        'status': 'completed',
-      })
-
-      if len(save_files) > 0:
-        last_file = save_files[-1]
-        if os.path.isfile(last_file) and os.path.getsize(last_file) < (12 * 1024):
-          shutil_task.remove(last_file)
-          save_files = save_files[:-1]
-          if len(save_files) == 0:
-            ModelTwitchItem.delete_by_id(self.download_status[streamer_id]['db_id'])
-          else:
-            self.set_download_status(streamer_id, {
-              'save_files': save_files
-            })
-      
-      self.clear_download_status(streamer_id)
     except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
@@ -825,6 +656,7 @@ class LogicTwitch(LogicModuleBase):
     use_segment = self.download_status[streamer_id]['use_segment']
     segment_size = self.download_status[streamer_id]['segment_size']
     audio_only = (quality == 'audio_only')
+    use_ts = self.download_status[streamer_id]['use_ts']
     save_format = self.download_status[streamer_id]['save_format']
 
     streamlink_options = []
@@ -841,9 +673,14 @@ class LogicTwitch(LogicModuleBase):
 
     streamlink_command = [sys.executable, '-m', 'streamlink', '-O', url, quality] + streamlink_options
     ffmpeg_base_command = [ffmpeg_path, '-i', '-',]
-    format_option = ['-acodec', 'copy'] if audio_only else ['-acodec', 'copy', '-vcodec', 'copy']
+    format_option = ['-acodec', 'mp3'] if (audio_only and not use_ts) else ['-c', 'copy']
+    format_option += ['-movflags', '+faststart'] if (not audio_only and not use_ts) else []
+    metadata_option = ['-metadata', f'title={self.download_status[streamer_id]["title"][0]}']
+    metadata_option += ['-metadata', f'{"artist" if audio_only else "author"}={self.download_status[streamer_id]["author"]}']
+    metadata_option += ['-metadata', f'genre=Twitch Streaming']
+    metadata_option += ['-metadata', f'date={str(datetime.now())[:10]}']
     segment_option = ['-f', 'segment', '-segment_time', str(segment_size*60), '-reset_timestamps', '1', '-segment_start_number', '1'] if use_segment else []
-    ffmpeg_command = ffmpeg_base_command + format_option + segment_option + [save_format]
+    ffmpeg_command = ffmpeg_base_command + format_option + metadata_option + segment_option + [save_format]
 
     start_time = datetime.now()
     end_time = ''
@@ -913,7 +750,7 @@ class ModelTwitchItem(db.Model):
   title = db.Column(db.String)
   category = db.Column(db.String)
   save_files = db.Column(db.String)
-  use_ffmpeg = db.Column(db.Boolean)
+  use_ts = db.Column(db.Boolean)
   use_segment = db.Column(db.Boolean)
   segment_size = db.Column(db.Integer)
   filesize = db.Column(db.Integer, default=0)
@@ -958,7 +795,7 @@ class ModelTwitchItem(db.Model):
   @classmethod
   def get_file_list_by_id(cls, id):
     item = cls.get_by_id(id)
-    return item.save_files.split('\n')
+    return json.loads(item.save_files)
 
   @classmethod
   def web_list(cls, req):
@@ -1008,7 +845,7 @@ class ModelTwitchItem(db.Model):
 
   @classmethod
   def plugin_load(cls):
-    items = db.session.query(cls).filter(cls.filesize < (12 * 1024)).all() # 12kB
+    items = db.session.query(cls).filter(cls.filesize < (4 * 1024)).all() # 4kB
     for item in items:
       if item.filesize == -1: continue
       save_files = cls.get_file_list_by_id(item.id)
@@ -1053,7 +890,7 @@ class ModelTwitchItem(db.Model):
     # encure_ascii=False 안하면 유니코드로 저장이 되어서 한글 검색이 안됨.
     item.category = json.dumps(initial_values['category'], ensure_ascii=False, sort_keys=False)
     item.quality = initial_values['quality']
-    item.use_ffmpeg = initial_values['use_ffmpeg']
+    item.use_ts = initial_values['use_ts']
     item.use_segment = initial_values['use_segment']
     item.segment_size = initial_values['segment_size']
     item.options = json.dumps(initial_values['options'], ensure_ascii=False, sort_keys=False)

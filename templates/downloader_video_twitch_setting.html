@@ -18,7 +18,7 @@
     {{ macros.info_text('twitch_description', left='설명', value='Twitch 실시간 스트리밍을 자동으로 다운로드 합니다.', desc=None) }}
     {{ macros.info_text_and_buttons('streamlink_version', 'steamlink 설치상태', [['streamlink_install_btn', '설치/업데이트']], value=arg['streamlink_version'], desc=['python3 이상', '단순히 pip 명령만 보내나 컴파일이 필요한 모듈이 있어 설치가 실패할 수도 있습니다.', '이 경우는 각자 알아서 설치하시기 바랍니다.', 'streamlink v3.0.0 미만은 업데이트 필요']) }}
     <div class="streamlink_dependency" >
-      {{ macros.setting_checkbox('twitch_use_ffmpeg', 'ffmpeg 사용', value=arg['twitch_use_ffmpeg'], desc=['다운로드 시에 ffmpeg를 사용합니다.(권장)', 'ffmpeg 플러그인을 통해서 경로가 설정되어 있어야 합니다.', '자연스러운 파일 분할 등의 이점이 있습니다.', arg['ffmpeg_version']]) }}
+      {{ macros.info_text('twitch_description_ffmpeg', left='ffmpeg 상태', value=arg['ffmpeg_version'], desc=['ffmpeg가 plugin을 통해서 사용할 수 있어야 합니다.']) }}
       {{ 
         macros.setting_input_text(
         'twitch_quality', 
@@ -63,6 +63,7 @@
           'title과 category는 다운 시작할 시점 기준.',
           '파일 확장자는 넣지 마세요.',
         ]) }}
+      {{ macros.setting_checkbox('twitch_use_ts', '스트리밍 파일 확장자', value=arg['twitch_use_ts'], desc=['True: .ts 또는 .aac', 'False: .mp4 또는 .mp3', 'True로 하면 파일 metadata가 작성되지 않습니다.', 'False로 할 시 재시작 등의 예기치못한 종료 시에 다운로드 파일이 재생되지 않을 수 있습니다.']) }}
       {{ macros.setting_checkbox('twitch_file_use_segment', '파일 분할', value=arg['twitch_file_use_segment'], desc=['각 파일의 최대 시간을 지정합니다.', '분할된 파일 사이 간에 끊김이 있을 수 있습니다.']) }}
       <div id="twitch_file_use_segment_div" class="collapse">
         {{ macros.setting_input_int(
@@ -86,7 +87,6 @@
         {{ macros.setting_checkbox('streamlink_twitch_disable_hosting', '--twitch-disable-hosting', value=arg['streamlink_twitch_disable_hosting']) }}
         {{ macros.setting_checkbox('streamlink_twitch_disable_reruns', '--twitch-disable-reruns', value=arg['streamlink_twitch_disable_reruns']) }}
         {{ macros.setting_checkbox('streamlink_twitch_low_latency', '--twitch-low-latency', value=arg['streamlink_twitch_low_latency']) }}
-        {{ macros.setting_input_int('streamlink_chunk_size', '다운로드 chunk size', min='1024', max='8192', value=arg['streamlink_chunk_size'], desc='ffmpeg 사용시에는 적용되지 않습니다.') }}
       </div>
       <div class="row justify-content-center">
         <div class="col-8">
