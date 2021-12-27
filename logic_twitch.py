@@ -700,7 +700,6 @@ class LogicTwitch(LogicModuleBase):
         'save_files': [save_format],
       })
 
-    # logger.debug(f'[{streamer_id}] start to download stream using ffmpeg, use_segment={use_segment}')
     streamlink_process = subprocess.Popen(streamlink_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     process = subprocess.Popen(ffmpeg_command, stdin=streamlink_process.stdout ,stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, encoding='utf8')
 
