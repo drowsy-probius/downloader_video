@@ -282,6 +282,7 @@ class LogicTwitch(LogicModuleBase):
     metadata = self.get_metadata(streamer_id)
     if self.download_status[streamer_id]['title'][-1] != metadata['title'] or \
       self.download_status[streamer_id]['category'][-1] != metadata['category']:
+      logger.debug(f'[{streamer_id}] metadata updated: {metadata}')
       self.set_download_status(streamer_id, {
         'title': self.download_status[streamer_id]['title'] + [metadata['title']],
         'category': self.download_status[streamer_id]['category'] + [metadata['category']],
@@ -578,7 +579,7 @@ class LogicTwitch(LogicModuleBase):
         # line = line.strip()
         # logger.debug(line)
         try:
-          if (datetime.now() - metadata_last_check_time).total_seconds() > 1800:
+          if (datetime.now() - metadata_last_check_time).total_seconds() > 5 * 60:
             metadata_last_check_time = datetime.now()
             self.update_metadata(streamer_id)
 
