@@ -60,6 +60,7 @@ class LogicTwitch(LogicModuleBase):
     'author': str,
     'title': [],
     'category': [],
+    'chapter': [],
     'url': str,
     'filepath': str, // 파일 저장 절대 경로
     'filename': str, // {part_number} 교체하기 전 이름
@@ -286,6 +287,7 @@ class LogicTwitch(LogicModuleBase):
       self.set_download_status(streamer_id, {
         'title': self.download_status[streamer_id]['title'] + [metadata['title']],
         'category': self.download_status[streamer_id]['category'] + [metadata['category']],
+        'chapter': self.download_status[streamer_id]['chapter'] + [self.download_status[streamer_id]['elapsed_time']],
       })
 
 
@@ -473,6 +475,7 @@ class LogicTwitch(LogicModuleBase):
       'author': 'No Author',
       'title': [],
       'category': [],
+      'chapter': [],
       'url': '',
       'filepath': '',
       'filename': '',
@@ -507,6 +510,7 @@ class LogicTwitch(LogicModuleBase):
         'author': metadata['author'],
         'title': [metadata['title']],
         'category': [metadata['category']],
+        'chapter': ['00:00:00'],
         'quality': quality,
         'url': stream.url,
         'options': self.get_options(),
@@ -691,9 +695,9 @@ class LogicTwitch(LogicModuleBase):
       'status': 'start',
       'start_time': '' if start_time is None else str(start_time).split('.')[0][2:],
       'filesize': 0,
-      'filesize_str': 'waiting',
-      'current_speed': 'waiting',
-      'elapsed_time': 'waiting',
+      'filesize_str': '0B',
+      'current_speed': '0B/s',
+      'elapsed_time': '00:00:00',
     })
 
     if not use_segment:
@@ -749,6 +753,7 @@ class ModelTwitchItem(db.Model):
   author = db.Column(db.String)
   title = db.Column(db.String)
   category = db.Column(db.String)
+  chapter = db.Column(db.String)
   save_files = db.Column(db.String)
   use_ts = db.Column(db.Boolean)
   use_segment = db.Column(db.Boolean)
@@ -774,6 +779,7 @@ class ModelTwitchItem(db.Model):
     ret = {x.name: getattr(self, x.name) for x in self.__table__.columns}
     ret['title'] = json.loads(self.title, object_pairs_hook=collections.OrderedDict)
     ret['category'] = json.loads(self.category, object_pairs_hook=collections.OrderedDict)
+    ret['chapter'] = json.loads(self.chapter, object_pairs_hook=collections.OrderedDict)
     ret['save_files'] = json.loads(self.save_files, object_pairs_hook=collections.OrderedDict)
     ret['options'] = json.loads(self.options, object_pairs_hook=collections.OrderedDict)
     return ret
@@ -889,6 +895,7 @@ class ModelTwitchItem(db.Model):
     item.title = json.dumps(initial_values['title'], ensure_ascii=False, sort_keys=False)
     # encure_ascii=False 안하면 유니코드로 저장이 되어서 한글 검색이 안됨.
     item.category = json.dumps(initial_values['category'], ensure_ascii=False, sort_keys=False)
+    item.chapter = json.dumps(initial_values['chapter'], ensure_ascii=False, sort_keys=False)
     item.quality = initial_values['quality']
     item.use_ts = initial_values['use_ts']
     item.use_segment = initial_values['use_segment']
@@ -906,6 +913,7 @@ class ModelTwitchItem(db.Model):
     item.manual_stop = download_status['manual_stop']
     item.title = json.dumps(download_status['title'], ensure_ascii=False, sort_keys=False)
     item.category = json.dumps(download_status['category'], ensure_ascii=False, sort_keys=False)
+    item.chapter = json.dumps(download_status['chapter'], ensure_ascii=False, sort_keys=False)
     item.save_files = json.dumps(download_status['save_files'], ensure_ascii=False, sort_keys=False)
     item.filesize = download_status['filesize']
     item.filesize_str = download_status['filesize_str']
