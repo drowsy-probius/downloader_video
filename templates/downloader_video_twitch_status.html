@@ -169,9 +169,19 @@ function render_list(streamlink_process_status)
     const start_time = streamlink_process_status[streamer_id].start_time;
     const enable = streamlink_process_status[streamer_id].enable;
     const quality = streamlink_process_status[streamer_id].quality;
+    let title = "No title";
+    let category = "No category";
+    if(streamlink_process_status[streamer_id].title.length)
+    {
+      title = streamlink_process_status[streamer_id].title[streamlink_process_status[streamer_id].title.length - 1];
+    }
+    if(streamlink_process_status[streamer_id].category.length)
+    {
+      category = streamlink_process_status[streamer_id].category[streamlink_process_status[streamer_id].category.length - 1];
+    }
 
     let streamer = `<div id=${streamer_id}_streamer>${name}</div>`
-    let stream_info = `<div id=${streamer_id}_stream_info>${streamlink_process_status[streamer_id].title.length ? streamlink_process_status[streamer_id].title[0] : 'No title'}<br>${category_link(streamlink_process_status[streamer_id].category.length ? streamlink_process_status[streamer_id].category[0] : 'No category')}</div>`
+    let stream_info = `<div id=${streamer_id}_stream_info>${title}<br>${category_link(category)}</div>`
     let started = `<div id=${streamer_id}_started>${running ? start_time : 'Offline'}<br>${quality}</div>`;
     let elapsed_time = `<div id=${streamer_id}_elapsed_time>${streamlink_process_status[streamer_id].elapsed_time}</div>`;
     let speed = `<div id=${streamer_id}_speed class="status_speed">${streamlink_process_status[streamer_id].current_speed}</div>`
@@ -223,9 +233,19 @@ function render_update(data)
   const div_speed = document.getElementById(`${streamer_id}_speed`);
   const div_size = document.getElementById(`${streamer_id}_size`);
 
+  let title = 'No title';
+  let category = 'No category';
+  if(status.title.length)
+  {
+    title = status.title[status.title.length - 1];
+  }
+  if(status.category.length)
+  {
+    category = status.category[status.category.length - 1];
+  }
 
   div_streamer.innerHTML = streamer_id_link(status.author, streamer_id)
-  div_stream_info.innerHTML = `${status.title.length ? status.title[0] : 'No title'}<br>${category_link(status.category.length ? status.category[0] : 'No category')}`;
+  div_stream_info.innerHTML = `${title}<br>${category_link(category)}`;
   div_started.innerHTML = `${running ? status.start_time : 'Offline'}<br>${status.quality}`;
   div_elapsed_time.innerText = status.elapsed_time;
   div_speed.innerText = status.current_speed;
