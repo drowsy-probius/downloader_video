@@ -818,8 +818,7 @@ TIMEBASE=1/1000
 START={start}
 #chapter ends at {chapter[i+1] if i+1 != chapter_length else 'video ends'}
 END={end}
-title={title}\
-{category}
+title={title}\\n{category}
 category={category}
 """
     with open(filename, 'w') as f:
