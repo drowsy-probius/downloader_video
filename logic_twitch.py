@@ -777,7 +777,7 @@ class LogicTwitch(LogicModuleBase):
     filetitle = filepath.split('/').pop()
     filename = filepath + '.chapter.txt'
     if os.path.exists(filename):
-      return True
+      logger.debug(f'{filename} already exists. overwriting...')
     
     running_time = 0
     [ehrs, emins, esecs] = elapsed_time.split(':')
