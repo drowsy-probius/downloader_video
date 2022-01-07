@@ -10,7 +10,7 @@ import copy
 import requests
 # third-party
 from flask import request, render_template, jsonify
-from sqlalchemy import or_, and_, func, not_, desc, engine
+from sqlalchemy import or_, and_, func, not_, desc
 # sjva 공용
 from framework import app, db, scheduler, path_data, socketio
 from framework.util import Util
@@ -757,7 +757,7 @@ class LogicTwitch(LogicModuleBase):
 
 
   def export_info(self, item):
-    if isinstance(item, engine.row.Row):
+    if type(item) != type({}):
       import collections 
       save_files = json.loads(item.save_files, object_pairs_hook=collections.OrderedDict)
       category = json.loads(item.category, object_pairs_hook=collections.OrderedDict)
