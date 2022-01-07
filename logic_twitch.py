@@ -809,8 +809,8 @@ artist={author}
 
       title = chapter_info[i]['title']
       category = chapter_info[i]['category']
-      title = title.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','').replace('\r','')
-      category = category.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','').replace('\r','')
+      title = title.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','\\n').replace('\r','\\r')
+      category = category.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','\\n').replace('\r','\\r')
       result += f""" 
 [CHAPTER]
 TIMEBASE=1/1000
@@ -818,7 +818,8 @@ TIMEBASE=1/1000
 START={start}
 #chapter ends at {chapter[i+1] if i+1 != chapter_length else 'video ends'}
 END={end}
-title={title} | {category}
+title={title}
+category={category}
 """
     with open(filename, 'w') as f:
       f.write(result)
