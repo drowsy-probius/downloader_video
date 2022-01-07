@@ -764,15 +764,18 @@ class LogicTwitch(LogicModuleBase):
       chapter = json.loads(item.chapter, object_pairs_hook=collections.OrderedDict)
       title = json.loads(item.title, object_pairs_hook=collections.OrderedDict)
       elapsed_time = item.elapsed_time
+      author = item.author
     else:
       save_files = item['save_files']
       category = item['category']
       chapter = item['chapter']
       title = item['title']
       elapsed_time = item['elapsed_time']
+      author = item['author']
 
-    filename = ''.join(save_files[0].split('.')[0:-1])
-    filename = filename + '.chapter.txt'
+    filepath = ''.join(save_files[0].split('.')[0:-1])
+    filetitle = filepath.split('/').pop()
+    filename = filepath + '.chapter.txt'
     if os.path.exists(filename):
       return True
     
@@ -784,7 +787,11 @@ class LogicTwitch(LogicModuleBase):
 
     chapter_length = len(chapter)
     chapter_info = []
-    result = ''
+    result = f""" 
+;FFMETADATA1
+title={filetitle}
+artist={author}
+"""
     for i in range(0, chapter_length):
       [hrs, mins, secs] = chapter[i].split(':')
       mins = (int(hrs) * 60) + int(mins)
@@ -800,13 +807,19 @@ class LogicTwitch(LogicModuleBase):
       if i+1 == chapter_length: end = running_time
       else: end = chapter_info[i + 1]['timestamp'] - 1
       if start == 0: start = 1
+
+      title = chapter_info[i]['title']
+      category = chapter_info[i]['category']
+      title = title.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','').replace('\r','')
+      category = category.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','').replace('\r','')
       result += f""" 
 [CHAPTER]
 TIMEBASE=1/1000
+#chapter starts at {chapter[i]}
 START={start}
+#chapter ends at {chapter[i+1] if i+1 != chapter_length else 'video ends'}
 END={end}
-title={chapter_info[i]['title']}
-category={chapter_info[i]['category']}
+title={title} | {category}
 """
     with open(filename, 'w') as f:
       f.write(result)
@@ -886,7 +899,7 @@ class ModelTwitchItem(db.Model):
 
   @classmethod
   def get_info_all(cls):
-    return db.session.query(cls).with_entities(cls.save_files, cls.category, cls.chapter, cls.title, cls.elapsed_time).all()
+    return db.session.query(cls).with_entities(cls.save_files, cls.category, cls.chapter, cls.title, cls.elapsed_time, cls.author).all()
 
 
   @classmethod
