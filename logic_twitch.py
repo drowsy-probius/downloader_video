@@ -787,8 +787,7 @@ class LogicTwitch(LogicModuleBase):
 
     chapter_length = len(chapter)
     chapter_info = []
-    result = f""" 
-;FFMETADATA1
+    result = f""";FFMETADATA1
 title={filetitle}
 artist={author}
 """
