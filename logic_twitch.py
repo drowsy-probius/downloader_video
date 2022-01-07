@@ -10,7 +10,7 @@ import copy
 import requests
 # third-party
 from flask import request, render_template, jsonify
-from sqlalchemy import or_, and_, func, not_, desc
+from sqlalchemy import or_, and_, func, not_, desc, engine
 # sjva 공용
 from framework import app, db, scheduler, path_data, socketio
 from framework.util import Util
@@ -29,6 +29,7 @@ class LogicTwitch(LogicModuleBase):
     'twitch_db_version': '1',
     'twitch_download_path': os.path.join(path_data, P.package_name, 'twitch'),
     'twitch_filename_format': '[%y%m%d %H:%M][{category}] {title}',
+    'twitch_export_info': 'True',
     'twitch_use_ts': 'True',
     'twitch_directory_name_format': '{author} ({streamer_id})/%y%m',
     'twitch_file_use_segment': 'False',
@@ -154,6 +155,20 @@ class LogicTwitch(LogicModuleBase):
               shutil_task.remove(save_file)
         db_return = ModelTwitchItem.delete_by_id(db_id)
         return jsonify({'ret': db_return})
+      elif sub == 'export_info':
+        failed_items = []
+        items = ModelTwitchItem.get_info_all()
+        for item in items:
+          try:
+            self.export_info(item)
+          except Exception as e:
+            failed_items.append(item)
+            logger.error(f'Exception: {e}')
+            logger.error(traceback.format_exc())
+        if len(failed_items) == 0:
+          return jsonify({'ret': True})
+        else:
+          return jsonify({'ret': False, 'msg': str(failed_items)})
     except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
@@ -416,6 +431,8 @@ class LogicTwitch(LogicModuleBase):
       '<': '(',
       '>': ')',
       '|': '_',
+      '\n': '',
+      '\r': '',
     }
     for key in replace_list.keys():
       source = source.replace(key, replace_list[key])
@@ -554,6 +571,9 @@ class LogicTwitch(LogicModuleBase):
 
       logger.debug(f'[{streamer_id}] start to download stream: use_segment={self.download_status[streamer_id]["use_segment"]} use_ts={use_ts}')
       self.download_stream_ffmpeg(streamer_id)
+      if P.ModelSetting.get_bool('twitch_export_info'):
+        self.export_info(self.download_status[streamer_id])
+      self.clear_download_status(streamer_id)
       if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
         del self.download_status[streamer_id]
     except Exception as e:
@@ -732,11 +752,66 @@ class LogicTwitch(LogicModuleBase):
       'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
       'download_speed': download_speed,
     })
-
     if len([i for i in self.download_status[streamer_id]['save_files'] if len(i)]) == 0:
       ModelTwitchItem.delete_by_id(self.download_status[streamer_id]['db_id'])
 
-    self.clear_download_status(streamer_id)
+
+  def export_info(self, item):
+    if isinstance(item, engine.row.Row):
+      import collections 
+      save_files = json.loads(item.save_files, object_pairs_hook=collections.OrderedDict)
+      category = json.loads(item.category, object_pairs_hook=collections.OrderedDict)
+      chapter = json.loads(item.chapter, object_pairs_hook=collections.OrderedDict)
+      title = json.loads(item.title, object_pairs_hook=collections.OrderedDict)
+      elapsed_time = item.elapsed_time
+    else:
+      save_files = item['save_files']
+      category = item['category']
+      chapter = item['chapter']
+      title = item['title']
+      elapsed_time = item['elapsed_time']
+
+    filename = ''.join(save_files[0].split('.')[0:-1])
+    filename = filename + '.chapter.txt'
+    if os.path.exists(filename):
+      return True
+    
+    running_time = 0
+    [ehrs, emins, esecs] = elapsed_time.split(':')
+    emins = (int(ehrs) * 60) + int(emins)
+    esecs = (int(emins) * 60) + int(esecs)
+    running_time = esecs * 1000
+
+    chapter_length = len(chapter)
+    chapter_info = []
+    result = ''
+    for i in range(0, chapter_length):
+      [hrs, mins, secs] = chapter[i].split(':')
+      mins = (int(hrs) * 60) + int(mins)
+      secs = (int(mins) * 60) + int(secs)
+      timestamp = (int(secs) * 1000)
+      chapter_info.append({
+        'timestamp': timestamp,
+        'title': title[i],
+        'category': category[i],
+      })
+    for i in range(0, chapter_length):
+      start = chapter_info[i]['timestamp']
+      if i+1 == chapter_length: end = running_time
+      else: end = chapter_info[i + 1]['timestamp'] - 1
+      if start == 0: start = 1
+      result += f""" 
+[CHAPTER]
+TIMEBASE=1/1000
+START={start}
+END={end}
+title={chapter_info[i]['title']}
+category={chapter_info[i]['category']}
+"""
+    with open(filename, 'w') as f:
+      f.write(result)
+      f.close()
+
 
 #########################################################
 # db
@@ -771,8 +846,10 @@ class ModelTwitchItem(db.Model):
   def __init__(self):
     pass
 
+
   def __repr__(self):
     return repr(self.as_dict())
+
 
   def as_dict(self):
     import collections 
@@ -784,6 +861,7 @@ class ModelTwitchItem(db.Model):
     ret['options'] = json.loads(self.options, object_pairs_hook=collections.OrderedDict)
     return ret
 
+
   def save(self):
     db.session.add(self)
     db.session.commit()
@@ -792,16 +870,24 @@ class ModelTwitchItem(db.Model):
   def get_by_id(cls, id):
     return db.session.query(cls).filter_by(id=id).first()
 
+
   @classmethod
   def delete_by_id(cls, id):
     db.session.query(cls).filter_by(id=id).delete()
     db.session.commit()
     return True
-  
+
+
   @classmethod
   def get_file_list_by_id(cls, id):
     item = cls.get_by_id(id)
     return json.loads(item.save_files)
+
+
+  @classmethod
+  def get_info_all(cls):
+    return db.session.query(cls).with_entities(cls.save_files, cls.category, cls.chapter, cls.title, cls.elapsed_time).all()
+
 
   @classmethod
   def web_list(cls, req):
@@ -819,6 +905,7 @@ class ModelTwitchItem(db.Model):
     ret['list'] = [item.as_dict() for item in lists]
     ret['paging'] = Util.get_paging_info(count, page, page_size)
     return ret
+
 
   @classmethod
   def make_query(cls, search='', order='desc', option='all'):
@@ -862,7 +949,7 @@ class ModelTwitchItem(db.Model):
       cls.delete_by_id(item.id)
     db.session.query(cls).update({'running': False})
     db.session.commit()
-  
+
 
   @classmethod
   def process_done(cls, download_status):

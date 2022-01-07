@@ -26,7 +26,8 @@
   {{ macros.m_row_start('0') }}
   {{ macros.m_col(2,  macros.m_strong('StartedTime')) }}
   {{ macros.m_col(2,  macros.m_strong('Streamer')) }}
-  {{ macros.m_col(8,  macros.m_strong('Info')) }}
+  {{ macros.m_col(6,  macros.m_strong('Info')) }}
+  <button id="export_info" class="btn btn-sm btn-outline-success" style="padding: 0.2rem;">Export INFO</button>
   {{ macros.m_row_end() }}
   {{ macros.m_hr_head_bottom() }}
   <div id="list_div"></div>
@@ -117,6 +118,30 @@ $("body").on('click', '#delete_file_btn', function(e) {
     data: {id:id, delete_file:delete_file},
     dataType: "json",
     success: delete_btn_callback
+  });
+});
+
+$("body").on('click', '#export_info', function(e) {
+  e.preventDefault();
+  $.ajax({
+    url: '/'+package_name+'/ajax/'+sub+ '/export_info',
+    type: "POST", 
+    cache: false,
+    dataType: "json",
+    success: (data) => {
+      if(data && data['ret'] === true)
+      {
+        $.notify('<strong>챕터 생성 성공</strong>', {
+          type: 'success'
+        });
+      }
+      else 
+      {
+        $.notify(`<strong>챕터 생성 실패${data ? '<br>'+data['msg'] : ''}</strong>`, {
+          type: 'warning'
+        });
+      }
+    }
   });
 });
 
