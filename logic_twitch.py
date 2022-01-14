@@ -205,6 +205,11 @@ class LogicTwitch(LogicModuleBase):
         if self.download_status[streamer_id]['running']:
           continue
         if not self.is_online(streamer_id):
+          '''
+          간혹 다운로드 완료 후에 상태 업데이트가 되는 경우가 있음
+          다음 스케쥴러 실행시에 초기화
+          '''
+          self.clear_properties(streamer_id)
           continue
         self.set_download_status(streamer_id, {'running': True})
         t = threading.Thread(target=self.download_thread_function, args=(streamer_id, ))
