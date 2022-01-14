@@ -913,7 +913,7 @@ class ModelTwitchItem(db.Model):
 
   @classmethod
   def get_info_all(cls):
-    return db.session.query(cls).with_entities(cls.save_files, cls.category, cls.chapter, cls.title, cls.elapsed_time, cls.author).all()
+    return db.session.query(cls).with_entities(cls.running, cls.save_files, cls.category, cls.chapter, cls.title, cls.elapsed_time, cls.author).all()
 
 
   @classmethod
