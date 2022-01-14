@@ -764,6 +764,7 @@ class LogicTwitch(LogicModuleBase):
   def export_info(self, item):
     if type(item) != type({}):
       import collections 
+      running = item.running
       save_files = json.loads(item.save_files, object_pairs_hook=collections.OrderedDict)
       category = json.loads(item.category, object_pairs_hook=collections.OrderedDict)
       chapter = json.loads(item.chapter, object_pairs_hook=collections.OrderedDict)
@@ -771,6 +772,7 @@ class LogicTwitch(LogicModuleBase):
       elapsed_time = item.elapsed_time
       author = item.author
     else:
+      running = item['running']
       save_files = item['save_files']
       category = item['category']
       chapter = item['chapter']
@@ -778,6 +780,8 @@ class LogicTwitch(LogicModuleBase):
       elapsed_time = item['elapsed_time']
       author = item['author']
 
+    if running:
+      return
     if len(save_files) == 0:
       return
     if not os.path.exists(save_files[0]):
@@ -817,8 +821,8 @@ artist={author}
       else: end = chapter_info[i + 1]['timestamp'] - 1
       if start == 0: start = 1
 
-      title = chapter_info[i]['title']
-      category = chapter_info[i]['category']
+      title = str(chapter_info[i]['title'])
+      category = str(chapter_info[i]['category'])
       title = title.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','\\n').replace('\r','\\r')
       category = category.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','\\n').replace('\r','\\r')
       result += f""" 
