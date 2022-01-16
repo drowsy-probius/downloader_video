@@ -787,7 +787,7 @@ class LogicTwitch(LogicModuleBase):
     if not os.path.exists(save_files[0]):
       return
 
-    filepath = ''.join(save_files[0].split('.')[0:-1])
+    filepath = '.'.join(save_files[0].split('.')[0:-1])
     filetitle = filepath.split('/').pop()
     filename = filepath + '.chapter.txt'
     # if os.path.exists(filename):
