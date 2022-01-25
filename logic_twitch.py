@@ -298,17 +298,24 @@ class LogicTwitch(LogicModuleBase):
 
 
   def update_metadata(self, streamer_id):
-    if not self.download_status[streamer_id]['running']:
-      return
-    metadata = self.get_metadata(streamer_id)
-    if self.download_status[streamer_id]['title'][-1] != metadata['title'] or \
-      self.download_status[streamer_id]['category'][-1] != metadata['category']:
-      logger.debug(f'[{streamer_id}] metadata updated: {metadata}')
-      self.set_download_status(streamer_id, {
-        'title': self.download_status[streamer_id]['title'] + [metadata['title']],
-        'category': self.download_status[streamer_id]['category'] + [metadata['category']],
-        'chapter': self.download_status[streamer_id]['chapter'] + [self.download_status[streamer_id]['elapsed_time']],
-      })
+    try:
+      if not self.download_status[streamer_id]['running']:
+        raise Exception(f'{streamer_id} is not online')
+      if len(self.download_status[streamer_id]['title']) < 1 or len(self.download_status[streamer_id]['category']) < 1:
+        raise Exception(f'the status of {streamer_id} has not been set. title: {self.download_status[streamer_id]["title"]}. category: {self.download_status[streamer_id]["category"]} ')
+      metadata = self.get_metadata(streamer_id)
+      if self.download_status[streamer_id]['title'][-1] != metadata['title'] or \
+        self.download_status[streamer_id]['category'][-1] != metadata['category']:
+        logger.debug(f'[{streamer_id}] metadata updated: {metadata}')
+        self.set_download_status(streamer_id, {
+          'title': self.download_status[streamer_id]['title'] + [metadata['title']],
+          'category': self.download_status[streamer_id]['category'] + [metadata['category']],
+          'chapter': self.download_status[streamer_id]['chapter'] + [self.download_status[streamer_id]['elapsed_time']],
+        })
+    except Exception as e:
+      logger.error(f'Exception while downloading {streamer_id}')
+      logger.error(f'{e}')
+      logger.error(traceback.format_exc())
 
 
   def get_streams(self, streamer_id):
@@ -473,6 +480,7 @@ class LogicTwitch(LogicModuleBase):
       ModelTwitchItem.update(self.download_status[streamer_id])
       self.socketio_callback('update', {'streamer_id': streamer_id, 'status': self.download_status[streamer_id]})
     except Exception as e:
+      logger.error(f'Exception while downloading {streamer_id}')
       logger.error('Exception:%s', e)
       logger.error(traceback.format_exc())
   
@@ -582,6 +590,7 @@ class LogicTwitch(LogicModuleBase):
       if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
         del self.download_status[streamer_id]
     except Exception as e:
+      logger.error(f'Exception while downloading {streamer_id}')
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
 
@@ -674,6 +683,7 @@ class LogicTwitch(LogicModuleBase):
               'status': 'No such file or directory',
             })
         except Exception as e:
+          logger.error(f'Exception while downloading {streamer_id}')
           logger.error(f'Exception: {e}')
           logger.error(traceback.format_exc())
           
