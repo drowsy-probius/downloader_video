@@ -67,6 +67,8 @@ class LogicTwitch(LogicModuleBase):
     'filename': str, // {part_number} 교체하기 전 이름
     'save_format': str, // segment 사용할 때 part_number가 %02d로 교체된 파일명의 full path
     'save_files: [],  // {part_number} 교체한 후 이름 목록
+    'export_chapter': bool,
+    'chapter_file': str, // 챕터파일 경로
     'quality': str,
     'use_ts': bool,
     'use_segment': bool,
@@ -511,6 +513,8 @@ class LogicTwitch(LogicModuleBase):
       'filename': '',
       'save_format': '',
       'save_files': [],
+      'export_chapter': P.ModelSetting.get_bool('twitch_export_info'),
+      'chapter_file': '',
       'quality': '',
       'use_ts': P.ModelSetting.get_bool('twitch_use_ts'),
       'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
@@ -584,7 +588,12 @@ class LogicTwitch(LogicModuleBase):
 
       logger.debug(f'[{streamer_id}] start to download stream: use_segment={self.download_status[streamer_id]["use_segment"]} use_ts={use_ts}')
       self.download_stream_ffmpeg(streamer_id)
-      if P.ModelSetting.get_bool('twitch_export_info'):
+      if self.download_status[streamer_id]['export_chapter']:
+        filepath = '.'.join(self.download_status[streamer_id]['save_files'][0].split('.')[0:-1])
+        chapter_file = filepath + '.chapter.txt'
+        self.set_download_status(streamer_id, {
+          'chapter_file': chapter_file,
+        })
         self.export_info(self.download_status[streamer_id])
       self.clear_download_status(streamer_id)
       if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
@@ -772,70 +781,74 @@ class LogicTwitch(LogicModuleBase):
 
 
   def export_info(self, item):
-    if type(item) != type({}):
-      import collections 
-      running = item.running
-      save_files = json.loads(item.save_files, object_pairs_hook=collections.OrderedDict)
-      category = json.loads(item.category, object_pairs_hook=collections.OrderedDict)
-      chapter = json.loads(item.chapter, object_pairs_hook=collections.OrderedDict)
-      title = json.loads(item.title, object_pairs_hook=collections.OrderedDict)
-      elapsed_time = item.elapsed_time
-      author = item.author
-    else:
-      running = item['running']
-      save_files = item['save_files']
-      category = item['category']
-      chapter = item['chapter']
-      title = item['title']
-      elapsed_time = item['elapsed_time']
-      author = item['author']
+    try:
+      if type(item) != type({}):
+        import collections 
+        running = item.running
+        save_files = json.loads(item.save_files, object_pairs_hook=collections.OrderedDict)
+        category = json.loads(item.category, object_pairs_hook=collections.OrderedDict)
+        chapter = json.loads(item.chapter, object_pairs_hook=collections.OrderedDict)
+        title = json.loads(item.title, object_pairs_hook=collections.OrderedDict)
+        elapsed_time = item.elapsed_time
+        author = item.author
+        chapter_file = item.chapter_file
+        filename = item.filename
+      else:
+        running = item['running']
+        save_files = item['save_files']
+        category = item['category']
+        chapter = item['chapter']
+        title = item['title']
+        elapsed_time = item['elapsed_time']
+        author = item['author']
+        chapter_file = item['chapter_file']
+        filename = item['filename']
 
-    if running:
-      return
-    if len(save_files) == 0:
-      return
-    if not os.path.exists(save_files[0]):
-      return
+      if running:
+        return
+      if len(save_files) == 0:
+        return
+      if not os.path.exists(save_files[0]):
+        return # db에는 있지만 로컬에는 없는 파일의 챕터 생성 방지
+      if len(chapter_file) == 0:
+        return
 
-    filepath = '.'.join(save_files[0].split('.')[0:-1])
-    filetitle = filepath.split('/').pop()
-    filename = filepath + '.chapter.txt'
-    # if os.path.exists(filename):
-    #   logger.debug(f'{filename} already exists. overwriting...')
-    
-    running_time = 0
-    [ehrs, emins, esecs] = elapsed_time.split(':')
-    emins = (int(ehrs) * 60) + int(emins)
-    esecs = (int(emins) * 60) + int(esecs)
-    running_time = esecs * 1000
+      # if os.path.exists(chapter_file):
+      #   logger.debug(f'{chapter_file} already exists. overwriting...')
+      
+      running_time = 0
+      [ehrs, emins, esecs] = elapsed_time.split(':')
+      emins = (int(ehrs) * 60) + int(emins)
+      esecs = (int(emins) * 60) + int(esecs)
+      running_time = esecs * 1000
 
-    chapter_length = len(chapter)
-    chapter_info = []
-    result = f""";FFMETADATA1
-title={filetitle}
+      chapter_length = len(chapter)
+      chapter_info = []
+      result = f""";FFMETADATA1
+title={filename}
 artist={author}
 """
-    for i in range(0, chapter_length):
-      [hrs, mins, secs] = chapter[i].split(':')
-      mins = (int(hrs) * 60) + int(mins)
-      secs = (int(mins) * 60) + int(secs)
-      timestamp = (int(secs) * 1000)
-      chapter_info.append({
-        'timestamp': timestamp,
-        'title': title[i],
-        'category': category[i],
-      })
-    for i in range(0, chapter_length):
-      start = chapter_info[i]['timestamp']
-      if i+1 == chapter_length: end = running_time
-      else: end = chapter_info[i + 1]['timestamp'] - 1
-      if start == 0: start = 1
+      for i in range(0, chapter_length):
+        [hrs, mins, secs] = chapter[i].split(':')
+        mins = (int(hrs) * 60) + int(mins)
+        secs = (int(mins) * 60) + int(secs)
+        timestamp = (int(secs) * 1000)
+        chapter_info.append({
+          'timestamp': timestamp,
+          'title': title[i],
+          'category': category[i],
+        })
+      for i in range(0, chapter_length):
+        start = chapter_info[i]['timestamp']
+        if i+1 == chapter_length: end = running_time
+        else: end = chapter_info[i + 1]['timestamp'] - 1
+        if start == 0: start = 1
 
-      title = str(chapter_info[i]['title'])
-      category = str(chapter_info[i]['category'])
-      title = title.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','\\n').replace('\r','\\r')
-      category = category.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','\\n').replace('\r','\\r')
-      result += f""" 
+        title = str(chapter_info[i]['title'])
+        category = str(chapter_info[i]['category'])
+        title = title.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','\\n').replace('\r','\\r')
+        category = category.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','\\n').replace('\r','\\r')
+        result += f""" 
 [CHAPTER]
 TIMEBASE=1/1000
 #chapter starts at {chapter[i]}
@@ -845,9 +858,13 @@ END={end}
 title={title}\\
 {category}
 """
-    with open(filename, 'w') as f:
-      f.write(result)
-      f.close()
+      with open(chapter_file, 'w') as f:
+        f.write(result)
+        f.close()
+    except Exception as e:
+      logger.error(f'Exception while creating chapter info: {author}')
+      logger.error(f'Exception: {e}')
+      logger.error(traceback.format_exc())
 
 
 #########################################################
@@ -866,6 +883,11 @@ class ModelTwitchItem(db.Model):
   title = db.Column(db.String)
   category = db.Column(db.String)
   chapter = db.Column(db.String)
+  export_chapter = db.Column(db.Boolean, default=False)
+  chapter_file = db.Column(db.String, default="")
+  filename = db.Column(db.String, default="")
+  filepath = db.Column(db.String, default="")
+  save_format = db.Column(db.String, default="")
   save_files = db.Column(db.String)
   use_ts = db.Column(db.Boolean)
   use_segment = db.Column(db.Boolean)
@@ -923,7 +945,17 @@ class ModelTwitchItem(db.Model):
 
   @classmethod
   def get_info_all(cls):
-    return db.session.query(cls).with_entities(cls.running, cls.save_files, cls.category, cls.chapter, cls.title, cls.elapsed_time, cls.author).all()
+    return db.session.query(cls).with_entities(
+      cls.running, 
+      cls.save_files, 
+      cls.category, 
+      cls.chapter, 
+      cls.title, 
+      cls.elapsed_time, 
+      cls.author,
+      cls.chapter_file,
+      cls.filename
+    ).all()
 
 
   @classmethod
@@ -1020,6 +1052,10 @@ class ModelTwitchItem(db.Model):
     # encure_ascii=False 안하면 유니코드로 저장이 되어서 한글 검색이 안됨.
     item.category = json.dumps(initial_values['category'], ensure_ascii=False, sort_keys=False)
     item.chapter = json.dumps(initial_values['chapter'], ensure_ascii=False, sort_keys=False)
+    item.save_format = initial_values['save_format']
+    item.filepath = initial_values['filepath']
+    item.filename = initial_values['filename']
+    item.export_chapter = initial_values['export_chapter']
     item.quality = initial_values['quality']
     item.use_ts = initial_values['use_ts']
     item.use_segment = initial_values['use_segment']
@@ -1038,7 +1074,11 @@ class ModelTwitchItem(db.Model):
     item.title = json.dumps(download_status['title'], ensure_ascii=False, sort_keys=False)
     item.category = json.dumps(download_status['category'], ensure_ascii=False, sort_keys=False)
     item.chapter = json.dumps(download_status['chapter'], ensure_ascii=False, sort_keys=False)
+    item.save_format = download_status['save_format']
+    item.filepath = download_status['filepath']
+    item.filename = download_status['filename']
     item.save_files = json.dumps(download_status['save_files'], ensure_ascii=False, sort_keys=False)
+    item.chapter_file = download_status['chapter_file']
     item.filesize = download_status['filesize']
     item.filesize_str = download_status['filesize_str']
     item.download_speed = download_status['download_speed']
