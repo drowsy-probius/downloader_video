@@ -224,7 +224,7 @@ class LogicTwitch(LogicModuleBase):
 
   def plugin_load(self):
     try:
-      self.is_streamlink_installed = True
+      self.is_streamlink_installed = (self.get_streamlink_version() != 'Not installed')
       self.set_streamlink_session()
     except Exception as e:
       logger.error(f'Exception: {e}')
