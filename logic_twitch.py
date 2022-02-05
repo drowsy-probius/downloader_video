@@ -101,6 +101,7 @@ class LogicTwitch(LogicModuleBase):
         arg['is_running'] = str(scheduler.is_running(job_id))
         arg['is_streamlink_installed'] = self.is_streamlink_installed
         arg['streamlink_version'] = self.get_streamlink_version()
+        arg['latest_streamlink_version'] = self.get_latest_streamlink_version()
         try:
           from ffmpeg.model import ModelSetting as FfmpegModelSetting
           import subprocess
@@ -268,6 +269,15 @@ class LogicTwitch(LogicModuleBase):
     except Exception as e:
       logger.error('Exception:%s', e)
       logger.error(traceback.format_exc())
+
+
+  def get_latest_streamlink_version(self):
+    try:
+      json_text = requests.get('https://pypi.org/pypi/streamlink/json').text
+      json_data = json.loads(json_text)
+      return json_data['info']['version']
+    except:
+      return 'Unable to get the latest version'
 
 
   def get_streamlink_version(self):
