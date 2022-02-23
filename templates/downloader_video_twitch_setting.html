@@ -63,7 +63,10 @@
           'title과 category는 다운 시작할 시점 기준.',
           '파일 확장자는 넣지 마세요.',
         ]) }}
-      {{ macros.setting_checkbox('twitch_export_info', '챕터 정보 내보내기 ', value=arg['twitch_export_info'], desc=['True: 같은 파일명으로 txt생성', 'mp4파일에 쓰기: ffmpeg -i INPUT.mp4(INPUT.ts) -i 챕터정보파일.txt -map_metadata 1 -codec copy OUTPUT.mp4']) }}
+      {{ macros.setting_checkbox('twitch_export_info', '챕터 정보 내보내기', value=arg['twitch_export_info'], desc=['True: 같은 파일명으로 txt생성', 'mp4파일에 쓰기: ffmpeg -i INPUT.mp4(INPUT.ts) -i 챕터정보파일.txt -map_metadata 1 -codec copy OUTPUT.mp4']) }}
+      <div id="twitch_export_info_div" class="collapse">
+        {{ macros.setting_checkbox('twitch_do_postprocess', '자동 후처리', value=arg['twitch_do_postprocess'], desc=['export 된 챕터 파일과 다운로드된 스트림을 합쳐서 mp4파일로 내보냅니다.', '다운로드 된 챕터 파일과 원본 스트림은 삭제됩니다.']) }}
+      </div>
       {{ macros.setting_checkbox('twitch_use_ts', '스트리밍 파일 확장자', value=arg['twitch_use_ts'], desc=['True: .ts 또는 .aac', 'False: .mp4 또는 .mp3', 'True: 다운로드 중에 재생이 가능하지만 파일 metadata가 작성되지 않습니다.', 'False: 다운로드 중에 재생이 불가능하고 재시작 등의 예기치못한 종료 시에 재생이 되지 않습니다.']) }}
       {{ macros.setting_checkbox('twitch_file_use_segment', '파일 분할', value=arg['twitch_file_use_segment'], desc=['각 파일의 최대 시간을 지정합니다.', '분할된 파일 사이 간에 끊김이 있을 수 있습니다.']) }}
       <div id="twitch_file_use_segment_div" class="collapse">
