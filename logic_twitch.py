@@ -941,6 +941,7 @@ title={title}\\
       for save_file in postprocess_info['save_files']:
         shutil_task.remove(save_file)
       
+      postprocess_info['done_postprocess'] = True
       ModelTwitchItem.update_postprocess(postprocess_info)
     except Exception as e:
       logger.error(f'Exception while postprocessing stream of: {download_status}')
