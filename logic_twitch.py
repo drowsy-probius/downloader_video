@@ -933,7 +933,7 @@ title={title}\\
         ffmpeg_command += ['-i', postprocess_info['save_files'][0]]
       ffmpeg_command += ['-map_metadata', '0', '-codec', 'copy', postprocess_info['save_format']]
 
-      process_log = subprocess.run(ffmpeg_command, capture_output=True, universal_newlines=True, encoding='utf8').stderr.strip('\n')
+      process_log = subprocess.run(ffmpeg_command, check=True, capture_output=True, universal_newlines=True, encoding='utf8').stderr.strip('\n')
       logger.debug(f'{postprocess_info["author"]} | result of postprocess job:')
       logger.debug(process_log)
 
