@@ -260,7 +260,7 @@ class LogicTwitch(LogicModuleBase):
         if app.config['config']['is_py2']:
           commands.append(['echo', 'python2 이하는 지원하지 않습니다.'])
         else:
-          commands.append([sys.executable, '-m', 'pip', 'install', '--upgrade', 'pip'])
+          # commands.append([sys.executable, '-m', 'pip', 'install', '--upgrade', 'pip'])
           commands.append([sys.executable, '-m', 'pip', 'install', '--upgrade', 'streamlink'])
         commands.append(['msg', u'설치가 완료되었습니다.'])
         commands.append(['msg', u'재시작이 필요합니다.'])
