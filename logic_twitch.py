@@ -14,7 +14,7 @@ from sqlalchemy import or_, and_, func, not_, desc
 # sjva 공용
 from framework import app, db, scheduler, path_data, socketio
 from framework.util import Util
-from framework.common.celery import shutil_task 
+from framework.common.celery import shutil_task
 from plugin import LogicModuleBase, default_route_socketio
 # 패키지
 from .plugin import P
@@ -117,7 +117,7 @@ class LogicTwitch(LogicModuleBase):
 
   def process_ajax(self, sub, req):
     try:
-      if sub == 'entity_list': 
+      if sub == 'entity_list':
         # GET /status
         return jsonify(self.download_status)
       elif sub == 'toggle':
@@ -145,13 +145,13 @@ class LogicTwitch(LogicModuleBase):
       elif sub == 'db_remove':
         db_id = req.form['id']
         is_running = len([
-          i for i in self.download_status 
+          i for i in self.download_status
           if int(self.download_status[i]['db_id']) == int(db_id) and \
             self.download_status[i]['running']
         ]) > 0
         if is_running:
           return jsonify({'ret': False, 'msg': '다운로드 중인 항목입니다.'})
-        
+
         delete_file = (req.form['delete_file'] == 'true')
         if delete_file:
           save_files = ModelTwitchItem.get_file_list_by_id(db_id)
@@ -186,7 +186,7 @@ class LogicTwitch(LogicModuleBase):
     old_streamer_ids = [sid for sid in before_streamer_ids if sid not in streamer_ids]
     new_streamer_ids = [sid for sid in streamer_ids if sid not in before_streamer_ids]
     existing_streamer_ids = [sid for sid in streamer_ids if sid in before_streamer_ids]
-    for streamer_id in old_streamer_ids: 
+    for streamer_id in old_streamer_ids:
       if self.download_status[streamer_id]['running']:
         self.set_download_status(streamer_id, {'enable': False, 'manual_stop': True})
       else:
@@ -301,7 +301,7 @@ class LogicTwitch(LogicModuleBase):
   def get_metadata(self, streamer_id):
     '''
     returns
-    {'id': '44828369517', 'author': 'heavyRainism', 'category': 'The King of Fighters XV', 'title': '호우!'} 
+    {'id': '44828369517', 'author': 'heavyRainism', 'category': 'The King of Fighters XV', 'title': '호우!'}
 
     매번 새로운 값을 가져오기 위해서 세션 새로 생성
     '''
@@ -334,8 +334,8 @@ class LogicTwitch(LogicModuleBase):
 
   def get_streams(self, streamer_id):
     '''
-    returns {qualities: urls} 
-    
+    returns {qualities: urls}
+
     옵션 값 유지하기 위해서 만들어진 세션 사용
     '''
     if self.streamlink_session is None:
@@ -348,7 +348,7 @@ class LogicTwitch(LogicModuleBase):
 
   def select_stream(self, streamer_id):
     '''
-    returns (quality, Streamlink stream class) 
+    returns (quality, Streamlink stream class)
     '''
     result_quality = ''
     result_stream = None
@@ -373,16 +373,16 @@ class LogicTwitch(LogicModuleBase):
         time.sleep(10)
         elapsed_time = elapsed_time + 10
         streams = self.get_streams(streamer_id)
-    
+
     for quality in quality_options:
       if quality in streams:
         result_quality = quality
         result_stream = streams[quality]
         break
-    
+
     if len(result_quality) == 0:
       raise Exception(f'No available streams for {streamer_id} with {quality_options}')
-    
+
     if result_quality in ['best', 'worst']: # convert best -> 1080p60, worst -> 160p
       for quality in streams:
         if result_stream.url == streams[quality].url and result_quality != quality:
@@ -428,8 +428,8 @@ class LogicTwitch(LogicModuleBase):
 
 
   def set_filepath(self, streamer_id):
-    ''' 
-    create download directory and set filepath attribute in self.download_status[streamer_id] 
+    '''
+    create download directory and set filepath attribute in self.download_status[streamer_id]
     '''
     download_base_directory = P.ModelSetting.get('twitch_download_path')
     download_make_directory = P.ModelSetting.get_bool('twitch_auto_make_folder')
@@ -497,11 +497,11 @@ class LogicTwitch(LogicModuleBase):
       logger.error(f'Exception while downloading {streamer_id}')
       logger.error('Exception:%s', e)
       logger.error(traceback.format_exc())
-  
+
 
   def clear_properties(self, streamer_id):
     '''
-    clear download_status[streamer_id] 
+    clear download_status[streamer_id]
     '''
     self.clear_download_status(streamer_id)
 
@@ -609,9 +609,8 @@ class LogicTwitch(LogicModuleBase):
         })
         self.export_info(self.download_status[streamer_id])
         if (quality != 'audio_only') and self.download_status[streamer_id]['do_postprocess']:
-          postprocess_thread = threading.Thread(target=self.ffmpeg_postprocess, args=self.download_status[streamer_id])
+          postprocess_thread = threading.Thread(target=self.ffmpeg_postprocess, args=(self.download_status[streamer_id], ))
           postprocess_thread.start()
-          logger.debug(f'run background postprocess job of {streamer_id}')
 
       self.clear_download_status(streamer_id)
       if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
@@ -654,7 +653,7 @@ class LogicTwitch(LogicModuleBase):
               'filesize': videosize + audiosize,
               'filesize_str': Util.sizeof_fmt(videosize + audiosize, suffix='B')
             })
-          
+
           if self.download_status[streamer_id]['manual_stop']:
             if streamlink_process.poll() is None:
               streamlink_process.kill()
@@ -711,8 +710,8 @@ class LogicTwitch(LogicModuleBase):
           logger.error(f'Exception while downloading {streamer_id}')
           logger.error(f'Exception: {e}')
           logger.error(traceback.format_exc())
-          
-    
+
+
     import subprocess
     from ffmpeg.model import ModelSetting as FfmpegModelSetting
     ffmpeg_path = FfmpegModelSetting.get('ffmpeg_path')
@@ -736,17 +735,6 @@ class LogicTwitch(LogicModuleBase):
         elif str(option[2]) == 'True':
           streamlink_options += [option_string]
 
-    streamlink_command = [sys.executable, '-m', 'streamlink', '-O', url, quality] + streamlink_options
-    ffmpeg_base_command = [ffmpeg_path, '-i', '-',]
-    format_option = ['-acodec', 'mp3'] if (audio_only and not use_ts) else ['-c', 'copy']
-    format_option += ['-movflags', '+faststart'] if (not audio_only and not use_ts) else []
-    metadata_option = ['-metadata', f'title={self.download_status[streamer_id]["title"][0]}']
-    metadata_option += ['-metadata', f'{"artist" if audio_only else "author"}={self.download_status[streamer_id]["author"]}']
-    metadata_option += ['-metadata', f'genre=Twitch Streaming']
-    metadata_option += ['-metadata', f'date={str(datetime.now())[:10]}']
-    segment_option = ['-f', 'segment', '-segment_time', str(segment_size*60), '-reset_timestamps', '1', '-segment_start_number', '1'] if use_segment else []
-    ffmpeg_command = ffmpeg_base_command + format_option + metadata_option + segment_option + [save_format]
-
     start_time = datetime.now()
     end_time = ''
     download_speed = 'N/A'
@@ -764,6 +752,17 @@ class LogicTwitch(LogicModuleBase):
       self.set_download_status(streamer_id, {
         'save_files': [save_format],
       })
+
+    streamlink_command = [sys.executable, '-m', 'streamlink', '-O', url, quality] + streamlink_options
+    ffmpeg_base_command = [ffmpeg_path, '-i', '-',]
+    format_option = ['-acodec', 'mp3'] if (audio_only and not use_ts) else ['-c', 'copy']
+    format_option += ['-movflags', '+faststart'] if (not audio_only and not use_ts) else []
+    metadata_option = ['-metadata', f'title={self.download_status[streamer_id]["title"][0]}']
+    metadata_option += ['-metadata', f'artist={self.download_status[streamer_id]["author"]}']
+    metadata_option += ['-metadata', f'genre={self.download_status[streamer_id]["category"][0]}']
+    metadata_option += ['-metadata', f'date={self.download_status[streamer_id]["start_time"]}']
+    segment_option = ['-f', 'segment', '-segment_time', str(segment_size*60), '-reset_timestamps', '1', '-segment_start_number', '1'] if use_segment else []
+    ffmpeg_command = ffmpeg_base_command + format_option + metadata_option + segment_option + [save_format]
 
     streamlink_process = subprocess.Popen(streamlink_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     process = subprocess.Popen(ffmpeg_command, stdin=streamlink_process.stdout ,stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, encoding='utf8')
@@ -785,7 +784,7 @@ class LogicTwitch(LogicModuleBase):
     is_size_exists = (self.download_status[streamer_id]['filesize'] > 0)
     if is_size_exists:
       download_speed = Util.sizeof_fmt(self.download_status[streamer_id]['filesize']/elapsed_time, suffix='B/s')
-    
+
     self.set_download_status(streamer_id, {
       'running': False,
       'end_time': '' if end_time is None else str(end_time).split('.')[0][2:],
@@ -799,7 +798,7 @@ class LogicTwitch(LogicModuleBase):
   def export_info(self, item):
     try:
       if type(item) != type({}):
-        import collections 
+        import collections
         running = item.running
         save_files = json.loads(item.save_files, object_pairs_hook=collections.OrderedDict)
         category = json.loads(item.category, object_pairs_hook=collections.OrderedDict)
@@ -809,6 +808,8 @@ class LogicTwitch(LogicModuleBase):
         author = item.author
         chapter_file = item.chapter_file
         filename = item.filename
+        start_time = item.start_time
+        end_time = item.end_time
       else:
         running = item['running']
         save_files = item['save_files']
@@ -819,6 +820,8 @@ class LogicTwitch(LogicModuleBase):
         author = item['author']
         chapter_file = item['chapter_file']
         filename = item['filename']
+        start_time = item['start_time']
+        end_time = item['end_time']
 
       if running:
         return
@@ -831,7 +834,7 @@ class LogicTwitch(LogicModuleBase):
 
       # if os.path.exists(chapter_file):
       #   logger.debug(f'{chapter_file} already exists. overwriting...')
-      
+
       running_time = 0
       [ehrs, emins, esecs] = elapsed_time.split(':')
       emins = (int(ehrs) * 60) + int(emins)
@@ -841,8 +844,10 @@ class LogicTwitch(LogicModuleBase):
       chapter_length = len(chapter)
       chapter_info = []
       result = f""";FFMETADATA1
-title={filename}
+title={title[0]}
 artist={author}
+genre={category[0]}
+date={start_time}
 """
       for i in range(0, chapter_length):
         [hrs, mins, secs] = chapter[i].split(':')
@@ -864,7 +869,7 @@ artist={author}
         category = str(chapter_info[i]['category'])
         title = title.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','\\n').replace('\r','\\r')
         category = category.replace('=','\=').replace(';','\;').replace('#','\#').replace('\\', '\\\\').replace('\n','\\n').replace('\r','\\r')
-        result += f""" 
+        result += f"""
 [CHAPTER]
 TIMEBASE=1/1000
 #chapter starts at {chapter[i]}
@@ -889,20 +894,11 @@ title={title}\\
 
     다른 함수는 streamer_id를 받아서 self.download_status에 직접 접근하는 반면에
     이 후처리 함수는 복사된 객체를 인자로 받음으로써
-    후처리 중에 스트리머가 새로 스트림을 시작하더라도 정상적으로 다운로드가 가능하도록 함 
+    후처리 중에 스트리머가 새로 스트림을 시작하더라도 정상적으로 다운로드가 가능하도록 함
     """
-    def postprocess_error_log_thread(process):
-      for line in iter(process.stdout.readline, ''):
-        try:
-          logger.error(f'{line}')
-        except Exception as e:
-          logger.error(f'Exception while downloading {streamer_id}')
-          logger.error(f'Exception: {e}')
-          logger.error(traceback.format_exc())
-  
     try:
       import subprocess
-      from framework.common.celery import remove as celery_remove
+      from framework.common.celery import shutil_task
       from ffmpeg.model import ModelSetting as FfmpegModelSetting
 
       ffmpeg_path = FfmpegModelSetting.get('ffmpeg_path')
@@ -912,7 +908,9 @@ title={title}\\
       postprocess_info['author'] = download_status['author']
       postprocess_info['do_postprocess'] = True
       postprocess_info['done_postprocess'] = False
-      postprocess_info['postprocess_files'] = []
+      postprocess_info['postprocess_files'] = [
+        '.'.join(f.split('.')[:-1]) + '.mp4' for f in download_status['save_files']
+      ]
 
       postprocess_info['save_files'] = download_status['save_files']
       postprocess_info['chapter_file'] = download_status['chapter_file']
@@ -924,32 +922,28 @@ title={title}\\
       postprocess_info['segment_size'] = download_status['segment_size']
 
       ffmpeg_command = [ffmpeg_path, '-i', postprocess_info['chapter_file'], ]
-      for save_file in postprocess_info['save_files']:
-        ffmpeg_command += ['-i', save_file,]
       if postprocess_info['use_segment']:
+        input_str = f'concat:{"|".join(postprocess_info["save_files"])}'
+        ffmpeg_command += ['-i', input_str]
         ffmpeg_command += [
-          '-f', 'segment', 
-          '-segment_time', str(postprocess_info['segment_size']*60), 
+          '-f', 'segment',
+          '-segment_time', str(postprocess_info['segment_size']*60),
           '-reset_timestamps', '1', '-segment_start_number', '1', ]
+      else:
+        ffmpeg_command += ['-i', postprocess_info['save_files'][0]]
       ffmpeg_command += ['-map_metadata', '0', '-codec', 'copy', postprocess_info['save_format']]
 
-      process = subprocess.Popen(ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, universal_newlines=True, encoding='utf8')
-      log_thread = threading.Thread(target=postprocess_error_log_thread, args=(process, ))
-      log_thread.start()
-      if log_thread is None:
-        # unknown error
-        pass
-      process_ret = process.wait()
-      if process_ret != 0:
-        logger.debug(f'process return code: {process_ret}')
-      celery_remove(postprocess_info['chapter_file'])
+      process_log = subprocess.run(ffmpeg_command, capture_output=True, universal_newlines=True, encoding='utf8').stderr.strip('\n')
+      logger.debug(f'{postprocess_info["author"]} | result of postprocess job:')
+      logger.debug(process_log)
+
+      shutil_task.remove(postprocess_info['chapter_file'])
       for save_file in postprocess_info['save_files']:
-        celery_remove(save_file)
-      # postprocess_info['chapter_file'] = ''
-      # postprocess_info['save_files'] = []
+        shutil_task.remove(save_file)
+      
       ModelTwitchItem.update_postprocess(postprocess_info)
     except Exception as e:
-      logger.error(f'Exception while postprocessing stream of: {author}')
+      logger.error(f'Exception while postprocessing stream of: {download_status}')
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
 
@@ -1000,13 +994,13 @@ class ModelTwitchItem(db.Model):
 
 
   def as_dict(self):
-    import collections 
+    import collections
     ret = {x.name: getattr(self, x.name) for x in self.__table__.columns}
     ret['title'] = json.loads(self.title, object_pairs_hook=collections.OrderedDict)
     ret['category'] = json.loads(self.category, object_pairs_hook=collections.OrderedDict)
     ret['chapter'] = json.loads(self.chapter, object_pairs_hook=collections.OrderedDict)
     ret['save_files'] = json.loads(self.save_files, object_pairs_hook=collections.OrderedDict)
-    ret['postprocess_files'] = json.loads(self.save_files, object_pairs_hook=collections.OrderedDict)
+    ret['postprocess_files'] = json.loads(self.postprocess_files, object_pairs_hook=collections.OrderedDict)
     ret['options'] = json.loads(self.options, object_pairs_hook=collections.OrderedDict)
     return ret
 
@@ -1036,15 +1030,17 @@ class ModelTwitchItem(db.Model):
   @classmethod
   def get_info_all(cls):
     return db.session.query(cls).with_entities(
-      cls.running, 
-      cls.save_files, 
-      cls.category, 
-      cls.chapter, 
-      cls.title, 
-      cls.elapsed_time, 
+      cls.running,
+      cls.save_files,
+      cls.category,
+      cls.chapter,
+      cls.title,
+      cls.elapsed_time,
       cls.author,
       cls.chapter_file,
-      cls.filename
+      cls.filename,
+      cls.start_time,
+      cls.end_time
     ).all()
 
 
@@ -1081,13 +1077,13 @@ class ModelTwitchItem(db.Model):
             conditions.append(cls.title.like(search_key))
             conditions.append(cls.author.like(search_key))
             conditions.append(cls.category.like(search_key))
-      
+
       search_key = f'%{search}%'
       conditions.append(cls.title.like(search_key) )
       conditions.append(cls.author.like(search_key) )
       conditions.append(cls.category.like(search_key) )
       query = query.filter(or_(*conditions))
-    
+
     if option != 'all':
       query = query.filter(cls.streamer_id == option)
 
@@ -1123,7 +1119,7 @@ class ModelTwitchItem(db.Model):
     db.session.query(cls).filter_by(filesize=0).delete()
     db.session.commit()
     return True
-  
+
 
   @classmethod
   def get_streamer_ids(cls):
@@ -1150,6 +1146,7 @@ class ModelTwitchItem(db.Model):
     item.use_ts = initial_values['use_ts']
     item.use_segment = initial_values['use_segment']
     item.do_postprocess = initial_values['do_postprocess']
+    item.postprocess_files = json.dumps([], ensure_ascii=False, sort_keys=False)
     item.segment_size = initial_values['segment_size']
     item.options = json.dumps(initial_values['options'], ensure_ascii=False, sort_keys=False)
     item.save()
@@ -1177,7 +1174,7 @@ class ModelTwitchItem(db.Model):
     item.end_time = download_status['end_time']
     item.elapsed_time = download_status['elapsed_time']
     item.save()
-  
+
   @classmethod
   def update_postprocess(cls, status):
     item = cls.get_by_id(status['db_id'])

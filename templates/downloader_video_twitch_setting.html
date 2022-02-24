@@ -65,7 +65,7 @@
         ]) }}
       {{ macros.setting_checkbox('twitch_export_info', '챕터 정보 내보내기', value=arg['twitch_export_info'], desc=['True: 같은 파일명으로 txt생성', 'mp4파일에 쓰기: ffmpeg -i INPUT.mp4(INPUT.ts) -i 챕터정보파일.txt -map_metadata 1 -codec copy OUTPUT.mp4']) }}
       <div id="twitch_export_info_div" class="collapse">
-        {{ macros.setting_checkbox('twitch_do_postprocess', '자동 후처리', value=arg['twitch_do_postprocess'], desc=['export 된 챕터 파일과 다운로드된 스트림을 합쳐서 mp4파일로 내보냅니다.', '다운로드 된 챕터 파일과 원본 스트림은 삭제됩니다.']) }}
+        {{ macros.setting_checkbox('twitch_do_postprocess', '자동 후처리', value=arg['twitch_do_postprocess'], desc=['분할된 파일이라면 메타데이터는 작성가능하지만 챕터정보는 쓰지 못합니다.', 'export 된 챕터 파일과 다운로드된 스트림을 합쳐서 mp4파일로 내보냅니다.', '다운로드 된 챕터 파일과 원본 스트림은 삭제됩니다.']) }}
       </div>
       {{ macros.setting_checkbox('twitch_use_ts', '스트리밍 파일 확장자', value=arg['twitch_use_ts'], desc=['True: .ts 또는 .aac', 'False: .mp4 또는 .mp3', 'True: 다운로드 중에 재생이 가능하지만 파일 metadata가 작성되지 않습니다.', 'False: 다운로드 중에 재생이 불가능하고 재시작 등의 예기치못한 종료 시에 재생이 되지 않습니다.']) }}
       {{ macros.setting_checkbox('twitch_file_use_segment', '파일 분할', value=arg['twitch_file_use_segment'], desc=['각 파일의 최대 시간을 지정합니다.', '분할된 파일 사이 간에 끊김이 있을 수 있습니다.']) }}
@@ -80,7 +80,7 @@
             '파일 명 옵션 중 {part_number} 부분이 1부터 증가하며 저장됩니다.',
             '{part_number}를 지정하지 않으면 파일명 뒤에 part{part_number}를 붙입니다.',
             'ffmpeg 사용하면서 분할 옵션을 사용할 경우 다운로드 중의 파일 크기와 속도는 나오지 않습니다.',
-            '1080p60 기준으로 34분: 대략 2GB',
+            '1080p60 8000kbps기준으로 34분: 대략 2GB',
             '단위 분',
           ]) }}
       </div>
@@ -181,6 +181,7 @@ const is_streamlink_installed = "{{ arg['is_streamlink_installed'] }}" === "True
 $(document).ready(function(){
   use_collapse('twitch_auto_make_folder');
   use_collapse('twitch_file_use_segment');
+  use_collapse('twitch_export_info');
   use_collapse('streamlink_options');
   use_collapse('twitch_wait_for_1080');
 
@@ -206,6 +207,10 @@ $('#twitch_auto_make_folder').change(function() {
 
 $('#twitch_file_use_segment').change(()=>{
   use_collapse('twitch_file_use_segment');
+});
+
+$('#twitch_export_info').change(()=>{
+  use_collapse('twitch_export_info');
 })
 
 $('#streamlink_options').change(()=>{
