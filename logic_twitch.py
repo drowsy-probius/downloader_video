@@ -89,7 +89,7 @@ class LogicTwitch(LogicModuleBase):
 
   def __init__(self, P):
     super(LogicTwitch, self).__init__(P, 'setting', scheduler_desc='twitch live 생방송 확인 작업')
-    self.name = 'twitch_live'
+    self.name = 'twitch'
     default_route_socketio(P, self)
 
 
