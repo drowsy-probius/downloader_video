@@ -313,6 +313,7 @@ class LogicTwitch(LogicModuleBase):
 
   def update_metadata(self, streamer_id):
     try:
+      metadata = {}
       if not self.download_status[streamer_id]['running']:
         raise Exception(f'{streamer_id} is not online')
       if len(self.download_status[streamer_id]['title']) < 1 or len(self.download_status[streamer_id]['category']) < 1:
@@ -328,6 +329,8 @@ class LogicTwitch(LogicModuleBase):
         })
     except Exception as e:
       logger.error(f'Exception while downloading {streamer_id}')
+      logger.error(f'{self.download_status[streamer_id]}')
+      logger.error(f'{metadata}')
       logger.error(f'{e}')
       logger.error(traceback.format_exc())
 
