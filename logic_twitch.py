@@ -474,10 +474,27 @@ class LogicTwitch(LogicModuleBase):
     and time foramt keywords: %m,%d,%Y, %H,%M,%S, ...
     https://docs.python.org/ko/3/library/datetime.html#strftime-and-strptime-format-codes
     '''
+    def truncate_string_in_byte_size(unicode_string, size):
+      # byte_string = unicode_string.encode('utf-8')
+      # limit = size
+      # # 
+      # while (byte_string[limit] & 0xc0) == 0x80:
+      #   limit -= 1
+      # return byte_string[:limit].decode('utf-8')
+      return unicode_string.encode('utf8')[:size].decode('utf8', 'ignore')
+
     result = format_str
     result = result.replace('{streamer_id}', streamer_id)
     result = result.replace('{author}', self.download_status[streamer_id]['author'])
-    result = result.replace('{title}', self.download_status[streamer_id]['title'][0])
+
+    # in normal filesystem, filename length is 256 bytes
+    title_limit = 147
+    original_title = self.download_status[streamer_id]['title'][0]
+    truncated_title = truncate_string_in_byte_size(original_title, title_limit) if len(original_title.encode('utf-8')) > title_limit else original_title
+    truncated_title = truncated_title.strip() + '... '
+
+    result = result.replace('{title}', truncated_title)
+
     result = result.replace('{category}', self.download_status[streamer_id]['category'][0])
     result = result.replace('{quality}', self.download_status[streamer_id]['quality'])
     result = datetime.now().strftime(result)
