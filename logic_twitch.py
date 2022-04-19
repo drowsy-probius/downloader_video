@@ -481,7 +481,7 @@ class LogicTwitch(LogicModuleBase):
       # while (byte_string[limit] & 0xc0) == 0x80:
       #   limit -= 1
       # return byte_string[:limit].decode('utf-8')
-      return unicode_string.encode('utf8')[:size].decode('utf8', 'ignore')
+      return unicode_string.encode('utf8')[:size].decode('utf8', 'ignore').strip() + '...'
 
     result = format_str
     result = result.replace('{streamer_id}', streamer_id)
@@ -491,7 +491,6 @@ class LogicTwitch(LogicModuleBase):
     title_limit = 147
     original_title = self.download_status[streamer_id]['title'][0]
     truncated_title = truncate_string_in_byte_size(original_title, title_limit) if len(original_title.encode('utf-8')) > title_limit else original_title
-    truncated_title = truncated_title.strip() + '... '
 
     result = result.replace('{title}', truncated_title)
 
