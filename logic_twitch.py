@@ -952,9 +952,14 @@ title={title}\\
         ffmpeg_command += ['-i', postprocess_info['save_files'][0]]
       ffmpeg_command += ['-map_metadata', '0', '-codec', 'copy', postprocess_info['save_format']]
 
-      process_log = subprocess.run(ffmpeg_command, check=True, capture_output=True, universal_newlines=True, encoding='utf8').stdout.strip('\n')
-      logger.debug(f'{postprocess_info["author"]} | result of postprocess job:')
-      logger.debug(process_log)
+      process_result = subprocess.run(ffmpeg_command, capture_output=True, universal_newlines=True, text=True)
+      if process_result.returncode != 0:
+        logger.debug(f'{postprocess_info["author"]} | some error occurred while postprocessing:')
+        for error_msg in process_result.stderr.split('\n'):
+          logger.error(error_msg)
+        raise Exception(f'postprocess error. do not remove downloaded raw files')
+      else:
+        logger.debug(f'{postprocess_info["author"]} | postprocessor done')
 
       shutil_task.remove(postprocess_info['chapter_file'])
       for save_file in postprocess_info['save_files']:
