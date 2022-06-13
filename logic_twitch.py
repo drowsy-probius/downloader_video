@@ -1044,6 +1044,8 @@ class ModelTwitchItem(db.Model):
   @classmethod
   def get_file_list_by_id(cls, id):
     item = cls.get_by_id(id)
+    if item.do_postprocess:
+      return json.loads(item.postprocess_files)
     return json.loads(item.save_files)
 
 
