@@ -784,7 +784,13 @@ class LogicTwitch(LogicModuleBase):
     ffmpeg_command = ffmpeg_base_command + format_option + metadata_option + segment_option + [save_format]
 
     streamlink_process = subprocess.Popen(streamlink_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    process = subprocess.Popen(ffmpeg_command, stdin=streamlink_process.stdout ,stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+    process = subprocess.Popen(
+      ffmpeg_command, 
+      stdin=streamlink_process.stdout,
+      stdout=subprocess.PIPE, 
+      stderr=subprocess.STDOUT, 
+      # universal_newlines=True
+    )
 
     log_thread = threading.Thread(target=ffmpeg_log_thread, args=(process, streamlink_process, ))
     log_thread.start()
@@ -954,7 +960,7 @@ title={title}\\
 
       process_result = subprocess.run(ffmpeg_command, capture_output=True, universal_newlines=True, text=True)
       if process_result.returncode != 0:
-        logger.debug(f'{postprocess_info["author"]} | some error occurred while postprocessing:')
+        logger.error(f'{postprocess_info["author"]} | some error occurred while postprocessing:')
         for error_msg in process_result.stderr.split('\n'):
           logger.error(error_msg)
         raise Exception(f'postprocess error. do not remove downloaded raw files')
