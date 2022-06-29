@@ -789,7 +789,9 @@ class LogicTwitch(LogicModuleBase):
       stdin=streamlink_process.stdout,
       stdout=subprocess.PIPE, 
       stderr=subprocess.STDOUT, 
-      # universal_newlines=True
+      universal_newlines=True,
+      encoding="utf-8",
+      errors="ignore",
     )
 
     log_thread = threading.Thread(target=ffmpeg_log_thread, args=(process, streamlink_process, ))
