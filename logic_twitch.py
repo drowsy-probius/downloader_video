@@ -468,20 +468,25 @@ class LogicTwitch(LogicModuleBase):
     return source
 
 
+  def truncate_string_in_byte_size(unicode_string, size):
+    # byte_string = unicode_string.encode('utf-8')
+    # limit = size
+    # # 
+    # while (byte_string[limit] & 0xc0) == 0x80:
+    #   limit -= 1
+    # return byte_string[:limit].decode('utf-8')
+    if len(unicode_string.encode('utf8')) > size:
+      return unicode_string.encode('utf8')[:size].decode('utf8', 'ignore').strip() + '...'
+    else:
+      return unicode_string
+
+
   def parse_string_from_format(self, streamer_id, format_str):
     '''
     keywords: {author}, {title}, {category}, {streamer_id}, {quality}
     and time foramt keywords: %m,%d,%Y, %H,%M,%S, ...
     https://docs.python.org/ko/3/library/datetime.html#strftime-and-strptime-format-codes
     '''
-    def truncate_string_in_byte_size(unicode_string, size):
-      # byte_string = unicode_string.encode('utf-8')
-      # limit = size
-      # # 
-      # while (byte_string[limit] & 0xc0) == 0x80:
-      #   limit -= 1
-      # return byte_string[:limit].decode('utf-8')
-      return unicode_string.encode('utf8')[:size].decode('utf8', 'ignore').strip() + '...'
 
     result = format_str
     result = result.replace('{streamer_id}', streamer_id)
@@ -490,7 +495,7 @@ class LogicTwitch(LogicModuleBase):
     # in normal filesystem, filename length is 256 bytes
     title_limit = 147
     original_title = self.download_status[streamer_id]['title'][0]
-    truncated_title = truncate_string_in_byte_size(original_title, title_limit) if len(original_title.encode('utf-8')) > title_limit else original_title
+    truncated_title = self.truncate_string_in_byte_size(original_title, title_limit)
 
     result = result.replace('{title}', truncated_title)
 
@@ -776,7 +781,7 @@ class LogicTwitch(LogicModuleBase):
     ffmpeg_base_command = [ffmpeg_path, '-i', '-',]
     format_option = ['-acodec', 'mp3'] if (audio_only and not use_ts) else ['-c', 'copy']
     format_option += ['-movflags', '+faststart'] if (not audio_only and not use_ts) else []
-    metadata_option = ['-metadata', f'title={self.download_status[streamer_id]["title"][0]}']
+    metadata_option = ['-metadata', f'title={self.truncate_string_in_byte_size(self.download_status[streamer_id]["title"][0], 147)}']
     metadata_option += ['-metadata', f'artist={self.download_status[streamer_id]["author"]}']
     metadata_option += ['-metadata', f'genre={self.download_status[streamer_id]["category"][0]}']
     metadata_option += ['-metadata', f'date={self.download_status[streamer_id]["start_time"]}']
