@@ -784,7 +784,7 @@ class LogicTwitch(LogicModuleBase):
     ffmpeg_command = ffmpeg_base_command + format_option + metadata_option + segment_option + [save_format]
 
     streamlink_process = subprocess.Popen(streamlink_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    process = subprocess.Popen(ffmpeg_command, stdin=streamlink_process.stdout ,stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, encoding='utf8')
+    process = subprocess.Popen(ffmpeg_command, stdin=streamlink_process.stdout ,stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
 
     log_thread = threading.Thread(target=ffmpeg_log_thread, args=(process, streamlink_process, ))
     log_thread.start()
