@@ -468,7 +468,7 @@ class LogicTwitch(LogicModuleBase):
     return source
 
 
-  def truncate_string_in_byte_size(unicode_string, size):
+  def truncate_string_in_byte_size(self, unicode_string, size):
     # byte_string = unicode_string.encode('utf-8')
     # limit = size
     # # 
