@@ -306,6 +306,7 @@ class LogicTwitch(LogicModuleBase):
     매번 새로운 값을 가져오기 위해서 세션 새로 생성
     '''
     import streamlink
+    # 5.0.0 이상에서는 (plugin_name, streamlink_plugin_class, url) 으로 할당해야 함.
     (streamlink_plugin_class, url) = streamlink.Streamlink().resolve_url(f'https://www.twitch.tv/{streamer_id}')
     streamlink_plugin = streamlink_plugin_class(url)
     return streamlink_plugin.get_metadata()
@@ -343,6 +344,7 @@ class LogicTwitch(LogicModuleBase):
     '''
     if self.streamlink_session is None:
       self.set_streamlink_session()
+    # 5.0.0 이상에서는 (plugin_name, streamlink_plugin_class, url) 으로 할당해야 함.
     (streamlink_plugin_class, url) = self.streamlink_session.resolve_url(f'https://www.twitch.tv/{streamer_id}')
     streamlink_plugin = streamlink_plugin_class(url)
     streams = streamlink_plugin.streams()
