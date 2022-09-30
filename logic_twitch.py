@@ -396,7 +396,7 @@ class LogicTwitch(LogicModuleBase):
         break
 
     if len(result_quality) == 0:
-      raise Exception(f'No available streams for {streamer_id} with {quality_options}')
+      raise Exception(f'No available streams for {streamer_id} with {quality_options} in {streams}')
 
     if result_quality in ['best', 'worst']: # convert best -> 1080p60, worst -> 160p
       for quality in streams:
@@ -653,14 +653,14 @@ class LogicTwitch(LogicModuleBase):
           if (quality != 'audio_only') and self.download_status[streamer_id]['do_postprocess']:
             postprocess_thread = threading.Thread(target=self.ffmpeg_postprocess, args=(self.download_status[streamer_id], ))
             postprocess_thread.start()
-
-      self.clear_download_status(streamer_id)
-      if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
-        del self.download_status[streamer_id]
     except Exception as e:
       logger.error(f'Exception while downloading {streamer_id}')
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
+    finally:
+      self.clear_download_status(streamer_id)
+      if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
+        del self.download_status[streamer_id]
 
 
   def download_stream_ffmpeg(self, streamer_id):
