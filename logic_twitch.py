@@ -294,10 +294,11 @@ class LogicTwitch(LogicModuleBase):
 
   def is_online(self, streamer_id):
     '''
-    return True if stream exists and streaming id is not None
+    return True if stream exists
+    do not check metadata but just update
     '''
-    metadata = self.get_metadata(streamer_id)
-    return len(self.get_streams(streamer_id)) > 0 and len([i for i in metadata if metadata[i] is None]) == 0
+    self.get_metadata(streamer_id)
+    return len(self.get_streams(streamer_id)) > 0
 
 
   def get_metadata(self, streamer_id):
@@ -308,16 +309,17 @@ class LogicTwitch(LogicModuleBase):
     매번 새로운 값을 가져오기 위해서 세션 새로 생성
     '''
     import streamlink
+    if self.streamlink_session is None:
+      self.set_streamlink_session()
     # 5.0.0 이상에서는 (plugin_name, streamlink_plugin_class, url) 으로 할당해야 함.
-    session = streamlink.Streamlink()
-    (plugin_name, streamlink_plugin_class, url) = session.resolve_url(f'https://www.twitch.tv/{streamer_id}')
-    streamlink_plugin = streamlink_plugin_class(session, url)
+    (plugin_name, streamlink_plugin_class, url) = self.streamlink_session.resolve_url(f'https://www.twitch.tv/{streamer_id}')
+    streamlink_plugin = streamlink_plugin_class(self.streamlink_session, url)
     streamlink_plugin._get_metadata()
     return {
       "id": streamlink_plugin.id,
-      "title": streamlink_plugin.title,
-      "author": streamlink_plugin.author,
-      "category": streamlink_plugin.category,
+      "title": str(streamlink_plugin.title),
+      "author": str(streamlink_plugin.author),
+      "category": str(streamlink_plugin.category),
     }
 
 
