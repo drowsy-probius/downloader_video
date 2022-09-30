@@ -765,6 +765,19 @@ class LogicTwitch(LogicModuleBase):
     use_ts = self.download_status[streamer_id]['use_ts']
     save_format = self.download_status[streamer_id]['save_format']
 
+    streamlink_options = []
+    options = self.get_options()
+    for option in options:
+      if len(option) == 2:
+        if option[0] != "http-proxy":
+          streamlink_options += [f'--{option[0]}', f'{option[1]}']
+      else:
+        option_string = f'--{option[0]}-{option[1]}'
+        if str(option[2]) not in ['True', 'False']:
+          streamlink_options += [option_string, f'{option[2]}']
+        elif str(option[2]) == 'True':
+          streamlink_options += [option_string]
+
     start_time = datetime.now()
     end_time = ''
     download_speed = 'N/A'
@@ -783,7 +796,9 @@ class LogicTwitch(LogicModuleBase):
         'save_files': [save_format],
       })
 
-    streamlink_command = [sys.executable, '-m', 'streamlink', '-O', url, "best"] # 주소는 항상 m3u8이 되었음. 화질 1개로 고정됨.
+    # 주소는 항상 m3u8이 되었음. 화질 1개로 고정됨.
+    # streamlink option이 m3u8에서도 통할지는 모르겠지만 일단 추가해 놓음.
+    streamlink_command = [sys.executable, '-m', 'streamlink', '-O', url, "best"] + streamlink_options 
     ffmpeg_base_command = [ffmpeg_path, '-i', '-',]
     format_option = ['-acodec', 'mp3'] if (audio_only and not use_ts) else ['-c', 'copy']
     format_option += ['-movflags', '+faststart'] if (not audio_only and not use_ts) else []
