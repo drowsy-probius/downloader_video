@@ -16,7 +16,7 @@
   <div class="tab-content" id="nav-tabContent">
   {{ macros.m_tab_content_start('normal', true) }}
     {{ macros.info_text('twitch_description', left='설명', value='Twitch 실시간 스트리밍을 자동으로 다운로드 합니다.', desc=None) }}
-    {{ macros.info_text_and_buttons('streamlink_version', 'steamlink 설치상태', [['streamlink_install_btn', '설치/업데이트']], value=arg['streamlink_version'], desc=['최신 버전: v' + arg['latest_streamlink_version'], 'python2는 지원되지 않습니다.', '단순히 pip 명령만 보내나 컴파일이 필요한 모듈이 있어 설치가 실패할 수도 있습니다.', 'streamlink v3.0.0 미만은 업데이트 필요']) }}
+    {{ macros.info_text_and_buttons('streamlink_version', 'steamlink 설치상태', [['streamlink_install_btn', '설치/업데이트']], value=arg['streamlink_version'], desc=['최신 버전: v' + arg['latest_streamlink_version'], 'python2는 지원되지 않습니다.', '단순히 pip 명령만 보내나 컴파일이 필요한 모듈이 있어 설치가 실패할 수도 있습니다.', 'streamlink v5.0.0 미만은 업데이트 필요']) }}
     <div class="streamlink_dependency" >
       {{ macros.info_text('twitch_description_ffmpeg', left='ffmpeg 상태', value=arg['ffmpeg_version'], desc=['ffmpeg가 plugin을 통해서 사용할 수 있어야 합니다.']) }}
       {{ 
@@ -40,7 +40,7 @@
         desc=['이 시간만큼 1080p 화질이 가능한 지 대기하고 시간초과시 `streamlink 화질`에서 다음으로 설정한 화질으로 다운합니다.', '단위 초']
         ) }}
       </div>
-      
+      {{ macros.setting_input_text('twitch_proxy_url', '프록시 주소', col='9', value=arg['twitch_proxy_url'], desc=['220930이후로 한국 IP로는 최대 720p만 시청 가능합니다.', '해외 프록시를 통해서 원본 스트림 주소를 가져옵니다.', '빈 값이면 사용하지 않습니다.']) }}
       {{ macros.setting_input_text_and_buttons('twitch_download_path', '저장 폴더',[['select_twitch_download_btn', '경로 선택']], value=arg['twitch_download_path'], desc=['방송 스트림이 저장될 폴더입니다.', '남은 용량이 충분한지 확인하세요.']) }}
       {{ macros.setting_checkbox('twitch_auto_make_folder', '하위 폴더 생성', value=arg['twitch_auto_make_folder'], desc='스트리머 이름으로 폴더를 생성하고 폴더 안에 다운로드합니다.') }}
       <div id="twitch_auto_make_folder_div" class="collapse">

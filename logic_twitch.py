@@ -28,6 +28,7 @@ class LogicTwitch(LogicModuleBase):
   db_default = {
     'twitch_db_version': '1',
     'twitch_download_path': os.path.join(path_data, P.package_name, 'twitch'),
+    'twitch_proxy_url': '',
     'twitch_filename_format': '[%Y-%m-%d %H:%M][{category}] {title}',
     'twitch_export_info': 'True',
     'twitch_use_ts': 'True',
@@ -196,6 +197,7 @@ class LogicTwitch(LogicModuleBase):
     for streamer_id in existing_streamer_ids:
       if not self.download_status[streamer_id]['running']:
         self.clear_properties(streamer_id)
+    self.set_streamlink_session() # 옵션이 변경되었으니 세션 재설정
 
 
   def scheduler_function(self):
@@ -307,9 +309,16 @@ class LogicTwitch(LogicModuleBase):
     '''
     import streamlink
     # 5.0.0 이상에서는 (plugin_name, streamlink_plugin_class, url) 으로 할당해야 함.
-    (streamlink_plugin_class, url) = streamlink.Streamlink().resolve_url(f'https://www.twitch.tv/{streamer_id}')
-    streamlink_plugin = streamlink_plugin_class(url)
-    return streamlink_plugin.get_metadata()
+    session = streamlink.Streamlink()
+    (plugin_name, streamlink_plugin_class, url) = session.resolve_url(f'https://www.twitch.tv/{streamer_id}')
+    streamlink_plugin = streamlink_plugin_class(session, url)
+    streamlink_plugin._get_metadata()
+    return {
+      "id": streamlink_plugin.id,
+      "title": streamlink_plugin.title,
+      "author": streamlink_plugin.author,
+      "category": streamlink_plugin.category,
+    }
 
 
   def update_metadata(self, streamer_id):
@@ -340,13 +349,14 @@ class LogicTwitch(LogicModuleBase):
     '''
     returns {qualities: urls}
 
-    옵션 값 유지하기 위해서 만들어진 세션 사용
+    옵션 값 유지하기 위해서 만들어진 세션 사용.
+    vpn을 이용해서 스트림 주소를 가져옴.
     '''
     if self.streamlink_session is None:
       self.set_streamlink_session()
     # 5.0.0 이상에서는 (plugin_name, streamlink_plugin_class, url) 으로 할당해야 함.
-    (streamlink_plugin_class, url) = self.streamlink_session.resolve_url(f'https://www.twitch.tv/{streamer_id}')
-    streamlink_plugin = streamlink_plugin_class(url)
+    (plugin_name, streamlink_plugin_class, url) = self.streamlink_session.resolve_url(f'https://www.twitch.tv/{streamer_id}')
+    streamlink_plugin = streamlink_plugin_class(self.streamlink_session, url)
     streams = streamlink_plugin.streams()
     return {q:streams[q] for q in streams}
 
@@ -401,26 +411,30 @@ class LogicTwitch(LogicModuleBase):
     returns [(option1), (option2), ...]
     '''
     options = []
+    http_proxy = P.ModelSetting.get('twitch_proxy_url')
     streamlink_twitch_disable_ads = P.ModelSetting.get_bool('streamlink_twitch_disable_ads')
     streamlink_twitch_disable_hosting = P.ModelSetting.get_bool('streamlink_twitch_disable_hosting')
     streamlink_twitch_disable_reruns = P.ModelSetting.get_bool('streamlink_twitch_disable_reruns')
     streamlink_twitch_low_latency = P.ModelSetting.get_bool('streamlink_twitch_low_latency')
     streamlink_hls_live_edge = P.ModelSetting.get_int('streamlink_hls_live_edge')
     options = options + [
+      ['hls-live-edge', streamlink_hls_live_edge],
       ['twitch', 'disable-ads', streamlink_twitch_disable_ads],
       ['twitch', 'disable-hosting', streamlink_twitch_disable_hosting],
       ['twitch', 'disable-reruns', streamlink_twitch_disable_reruns],
       ['twitch', 'low-latency', streamlink_twitch_low_latency],
-      ['hls-live-edge', streamlink_hls_live_edge],
     ]
+    if len(http_proxy) != 0:
+      options = options + [
+        ['http-proxy', http_proxy]
+      ]
     return options
 
 
   def set_streamlink_session(self):
     try:
-      if self.streamlink_session is None:
-        import streamlink
-        self.streamlink_session = streamlink.Streamlink()
+      import streamlink
+      self.streamlink_session = streamlink.Streamlink()
       options = self.get_options()
       for option in options:
         if len(option) == 2:
@@ -571,14 +585,15 @@ class LogicTwitch(LogicModuleBase):
 
   def download_thread_function(self, streamer_id):
     try:
-      metadata = self.get_metadata(streamer_id)
-      while metadata['author'] is None:
-        metadata = self.get_metadata(streamer_id)
-
-      (quality, stream) = self.select_stream(streamer_id)
       self.set_download_status(streamer_id, {
         'online': True,
         'manual_stop': False,
+      })
+      metadata = self.get_metadata(streamer_id)
+      while metadata['author'] is None:
+        metadata = self.get_metadata(streamer_id)
+      (quality, stream) = self.select_stream(streamer_id)
+      self.set_download_status(streamer_id, {
         'author': metadata['author'],
         'title': [metadata['title']],
         'category': [metadata['category']],
@@ -626,17 +641,18 @@ class LogicTwitch(LogicModuleBase):
       })
 
       logger.debug(f'[{streamer_id}] start to download stream: use_segment={self.download_status[streamer_id]["use_segment"]} use_ts={use_ts}')
-      self.download_stream_ffmpeg(streamer_id)
-      if self.download_status[streamer_id]['export_chapter']:
-        filepath = '.'.join(self.download_status[streamer_id]['save_files'][0].split('.')[0:-1])
-        chapter_file = filepath + '.chapter.txt'
-        self.set_download_status(streamer_id, {
-          'chapter_file': chapter_file,
-        })
-        self.export_info(self.download_status[streamer_id])
-        if (quality != 'audio_only') and self.download_status[streamer_id]['do_postprocess']:
-          postprocess_thread = threading.Thread(target=self.ffmpeg_postprocess, args=(self.download_status[streamer_id], ))
-          postprocess_thread.start()
+      downloadResult = self.download_stream_ffmpeg(streamer_id)
+      if downloadResult != -1: # 다운 시작 전에 취소됨.
+        if self.download_status[streamer_id]['export_chapter']:
+          filepath = '.'.join(self.download_status[streamer_id]['save_files'][0].split('.')[0:-1])
+          chapter_file = filepath + '.chapter.txt'
+          self.set_download_status(streamer_id, {
+            'chapter_file': chapter_file,
+          })
+          self.export_info(self.download_status[streamer_id])
+          if (quality != 'audio_only') and self.download_status[streamer_id]['do_postprocess']:
+            postprocess_thread = threading.Thread(target=self.ffmpeg_postprocess, args=(self.download_status[streamer_id], ))
+            postprocess_thread.start()
 
       self.clear_download_status(streamer_id)
       if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
@@ -741,25 +757,13 @@ class LogicTwitch(LogicModuleBase):
     import subprocess
     from ffmpeg.model import ModelSetting as FfmpegModelSetting
     ffmpeg_path = FfmpegModelSetting.get('ffmpeg_path')
-    url = f'https://www.twitch.tv/{streamer_id}'
-    quality = self.download_status[streamer_id]['quality']
+    url = self.download_status[streamer_id]['url'] # 프록시로 얻은 주소를 사용함.
+    quality = self.download_status[streamer_id]['quality'] # 이제 단순히 audio_only만 체크하기 위한 값
     use_segment = self.download_status[streamer_id]['use_segment']
     segment_size = self.download_status[streamer_id]['segment_size']
     audio_only = (quality == 'audio_only')
     use_ts = self.download_status[streamer_id]['use_ts']
     save_format = self.download_status[streamer_id]['save_format']
-
-    streamlink_options = []
-    options = self.get_options()
-    for option in options:
-      if len(option) == 2:
-        streamlink_options += [f'--{option[0]}', f'{option[1]}']
-      else:
-        option_string = f'--{option[0]}-{option[1]}'
-        if str(option[2]) not in ['True', 'False']:
-          streamlink_options += [option_string, f'{option[2]}']
-        elif str(option[2]) == 'True':
-          streamlink_options += [option_string]
 
     start_time = datetime.now()
     end_time = ''
@@ -779,7 +783,7 @@ class LogicTwitch(LogicModuleBase):
         'save_files': [save_format],
       })
 
-    streamlink_command = [sys.executable, '-m', 'streamlink', '-O', url, quality] + streamlink_options
+    streamlink_command = [sys.executable, '-m', 'streamlink', '-O', url, "best"] # 주소는 항상 m3u8이 되었음. 화질 1개로 고정됨.
     ffmpeg_base_command = [ffmpeg_path, '-i', '-',]
     format_option = ['-acodec', 'mp3'] if (audio_only and not use_ts) else ['-c', 'copy']
     format_option += ['-movflags', '+faststart'] if (not audio_only and not use_ts) else []
@@ -789,6 +793,9 @@ class LogicTwitch(LogicModuleBase):
     metadata_option += ['-metadata', f'date={self.download_status[streamer_id]["start_time"]}']
     segment_option = ['-f', 'segment', '-segment_time', str(segment_size*60), '-reset_timestamps', '1', '-segment_start_number', '1'] if use_segment else []
     ffmpeg_command = ffmpeg_base_command + format_option + metadata_option + segment_option + [save_format]
+
+    if self.download_status[streamer_id]['manual_stop']:
+      return -1
 
     streamlink_process = subprocess.Popen(streamlink_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     process = subprocess.Popen(
