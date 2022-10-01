@@ -376,10 +376,12 @@ class LogicTwitch(LogicModuleBase):
       )
       contents = res.json() 
       user = contents["data"]["user"]
+      if user["stream"] is None:
+        raise Exception(f"{streamer_id} is offline?")
       metadata["id"] = user["lastBroadcast"]["id"]
+      metadata["title"] = user["lastBroadcast"]["title"]
       metadata["category"] = user["stream"]["game"]["name"]
       metadata["categoryType"] = user["stream"]["game"]["__typename"]
-      metadata["title"] = user["lastBroadcast"]["title"]
     except Exception as e:
       logger.error(f'[get_stream_metadata] {streamer_id} {metadata}')
       logger.error(f'{e}')
@@ -400,11 +402,11 @@ class LogicTwitch(LogicModuleBase):
   def update_metadata(self, streamer_id):
     try:
       stream_metadata = {}
+      stream_metadata = self.get_stream_metadata(streamer_id)
       if not self.download_status[streamer_id]['running']:
         raise Exception(f'{streamer_id} is not online')
       if len(self.download_status[streamer_id]['title']) < 1 or len(self.download_status[streamer_id]['category']) < 1:
         raise Exception(f'the status of {streamer_id} has not been set. title: {self.download_status[streamer_id]["title"]}. category: {self.download_status[streamer_id]["category"]} ')
-      stream_metadata = self.get_stream_metadata(streamer_id)
       if self.download_status[streamer_id]['title'][-1] != stream_metadata['title'] or \
         self.download_status[streamer_id]['category'][-1] != stream_metadata['category']:
         logger.debug(f'[{streamer_id}] metadata updated: {stream_metadata}')
