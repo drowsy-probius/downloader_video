@@ -3,16 +3,15 @@
 # imports
 #########################################################
 # python
-import os, sys, traceback, re, json, threading, base64
-from datetime import datetime, timedelta
-import copy
+import os, sys, traceback, re, json, threading
+from datetime import datetime
 # third-party
 import requests
 # third-party
-from flask import request, render_template, jsonify
-from sqlalchemy import or_, and_, func, not_, desc
+from flask import render_template, jsonify
+from sqlalchemy import or_, desc
 # sjva 공용
-from framework import app, db, scheduler, path_data, socketio
+from framework import app, db, scheduler, path_data
 from framework.util import Util
 from framework.common.celery import shutil_task
 from plugin import LogicModuleBase, default_route_socketio
@@ -123,7 +122,7 @@ class LogicTwitch(LogicModuleBase):
       if sub == 'entity_list':
         # GET /status
         return jsonify(self.download_status)
-      elif sub == 'toggle':
+      if sub == 'toggle':
         streamer_id = req.form['streamer_id']
         command = req.form['command']
         result = {
@@ -132,20 +131,20 @@ class LogicTwitch(LogicModuleBase):
         if command == 'disable':
           result['previous_status'] = 'online' if self.download_status[streamer_id]['online'] else 'offline'
           self.set_download_status(streamer_id, {'enable': False, 'manual_stop': True})
-        elif command == 'enable':
+        else: # enable
           self.set_download_status(streamer_id, {'enable': True, 'manual_stop': False})
         return jsonify(result)
-      elif sub == 'install':
+      if sub == 'install':
         self.install_streamlink()
         self.is_streamlink_installed = True
         self.set_streamlink_session()
         return jsonify({})
-      elif sub == 'web_list':
+      if sub == 'web_list':
         # POST /list
         database = ModelTwitchItem.web_list(req)
         database['streamer_ids'] = ModelTwitchItem.get_streamer_ids()
         return jsonify(database)
-      elif sub == 'db_remove':
+      if sub == 'db_remove':
         db_id = req.form['id']
         is_running = len([
           i for i in self.download_status
@@ -163,7 +162,7 @@ class LogicTwitch(LogicModuleBase):
               shutil_task.remove(save_file)
         db_return = ModelTwitchItem.delete_by_id(db_id)
         return jsonify({'ret': db_return})
-      elif sub == 'export_info':
+      if sub == 'export_info':
         failed_items = []
         items = ModelTwitchItem.get_info_all()
         for item in items:
@@ -175,8 +174,7 @@ class LogicTwitch(LogicModuleBase):
             logger.error(traceback.format_exc())
         if len(failed_items) == 0:
           return jsonify({'ret': True})
-        else:
-          return jsonify({'ret': False, 'msg': str(failed_items)})
+        return jsonify({'ret': False, 'msg': str(failed_items)})
     except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
@@ -573,8 +571,7 @@ class LogicTwitch(LogicModuleBase):
     # return byte_string[:limit].decode('utf-8')
     if len(unicode_string.encode('utf8')) > size:
       return unicode_string.encode('utf8')[:size].decode('utf8', 'ignore').strip() + '...'
-    else:
-      return unicode_string
+    return unicode_string
 
 
   def parse_string_from_format(self, streamer_id, format_str):
@@ -873,7 +870,7 @@ class LogicTwitch(LogicModuleBase):
 
     self.set_download_status(streamer_id, {
       'status': 'start',
-      'start_time': '' if start_time is None else str(start_time).split('.')[0][2:],
+      'start_time': '' if start_time is None else str(start_time).split('.', maxsplit=1)[0][2:],
       'filesize': 0,
       'filesize_str': '0B',
       'current_speed': '0B/s',
@@ -932,7 +929,7 @@ class LogicTwitch(LogicModuleBase):
 
     self.set_download_status(streamer_id, {
       'running': False,
-      'end_time': '' if end_time is None else str(end_time).split('.')[0][2:],
+      'end_time': '' if end_time is None else str(end_time).split('.', maxsplit=1)[0][2:],
       'elapsed_time': '%02d:%02d:%02d' % (elapsed_time/3600, (elapsed_time/60)%60, elapsed_time%60),
       'download_speed': download_speed,
     })
@@ -1006,9 +1003,12 @@ date={start_time}
         })
       for i in range(0, chapter_length):
         start = chapter_info[i]['timestamp']
-        if i+1 == chapter_length: end = running_time
-        else: end = chapter_info[i + 1]['timestamp'] - 1
-        if start == 0: start = 1
+        if i+1 == chapter_length: 
+          end = running_time
+        else: 
+          end = chapter_info[i + 1]['timestamp'] - 1
+        if start == 0: 
+          start = 1
 
         title = str(chapter_info[i]['title'])
         category = str(chapter_info[i]['category'])
@@ -1024,7 +1024,7 @@ END={end}
 title={title}\\
 {category}
 """
-      with open(chapter_file, 'w') as f:
+      with open(chapter_file, 'w', encoding="utf8") as f:
         f.write(result)
         f.close()
     except Exception as e:
@@ -1043,7 +1043,6 @@ title={title}\\
     """
     try:
       import subprocess
-      from framework.common.celery import shutil_task
       from ffmpeg.model import ModelSetting as FfmpegModelSetting
 
       ffmpeg_path = FfmpegModelSetting.get('ffmpeg_path')
@@ -1084,13 +1083,12 @@ title={title}\\
         for error_msg in process_result.stderr.split('\n'):
           logger.error(error_msg)
         raise Exception(f'postprocess error. do not remove downloaded raw files')
-      else:
-        logger.debug(f'{postprocess_info["author"]} | postprocessor done')
+      
+      logger.debug(f'{postprocess_info["author"]} | postprocessor done')
 
       shutil_task.remove(postprocess_info['chapter_file'])
       for save_file in postprocess_info['save_files']:
         shutil_task.remove(save_file)
-      
       postprocess_info['done_postprocess'] = True
       ModelTwitchItem.update_postprocess(postprocess_info)
     except Exception as e:
@@ -1248,7 +1246,8 @@ class ModelTwitchItem(db.Model):
   def plugin_load(cls):
     items = db.session.query(cls).filter(cls.filesize < (4 * 1024)).all() # 4kB
     for item in items:
-      if item.filesize == -1: continue
+      if item.filesize == -1: 
+        continue
       save_files = cls.get_file_list_by_id(item.id)
       for save_file in save_files:
         if os.path.exists(save_file) and os.path.isfile(save_file):
@@ -1282,7 +1281,7 @@ class ModelTwitchItem(db.Model):
   @classmethod
   def insert(cls, streamer_id, initial_values):
     item = ModelTwitchItem()
-    item.created_time = str(datetime.now()).split('.')[0][2:]
+    item.created_time = str(datetime.now()).split('.', maxsplit=1)[0][2:]
     item.streamer_id = streamer_id
     item.running = initial_values['running']
     item.manual_stop = initial_values['manual_stop']
@@ -1309,7 +1308,8 @@ class ModelTwitchItem(db.Model):
   @classmethod
   def update(cls, download_status):
     item = cls.get_by_id(download_status['db_id'])
-    if item is None: return
+    if item is None: 
+      return
     item.running = download_status['running']
     item.manual_stop = download_status['manual_stop']
     item.title = json.dumps(download_status['title'], ensure_ascii=False, sort_keys=False)
@@ -1331,7 +1331,8 @@ class ModelTwitchItem(db.Model):
   @classmethod
   def update_postprocess(cls, status):
     item = cls.get_by_id(status['db_id'])
-    if item is None: return
+    if item is None: 
+      return
     item.done_postprocess = status['done_postprocess']
     item.postprocess_files = json.dumps(status['postprocess_files'], ensure_ascii=False, sort_keys=False)
     item.save_files = json.dumps(status['save_files'], ensure_ascii=False, sort_keys=False)
