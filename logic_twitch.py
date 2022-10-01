@@ -60,7 +60,9 @@ class LogicTwitch(LogicModuleBase):
     'enable': bool,
     'manual_stop': bool,
     'online': bool,
+    'channel_id': str,
     'author': str,
+    'stream_id': str,
     'title': [],
     'category': [],
     'chapter': [],
@@ -249,8 +251,6 @@ class LogicTwitch(LogicModuleBase):
     return True
 
 
-  #########################################################
-
   # imported from soju6jan/klive/logic_streamlink.py
   @staticmethod
   def install_streamlink():
@@ -274,6 +274,20 @@ class LogicTwitch(LogicModuleBase):
       logger.error('Exception:%s', e)
       logger.error(traceback.format_exc())
 
+  #########################################################
+
+  def create_gql_query(self, operationName, sha256hash, **variables):
+    return {
+      "operationName": operationName,
+      "extensions": {
+        "persistedQuery": {
+          "version": 1,
+          "sha256Hash": sha256hash
+        }
+      },
+      "variables": dict(**variables)
+    }
+
 
   def get_latest_streamlink_version(self):
     try:
@@ -292,57 +306,121 @@ class LogicTwitch(LogicModuleBase):
       return 'Not installed'
 
 
+  def get_channel_metadata(self, streamer_id):
+    """
+    {
+      'id': '818...', 
+      'author': '...', 
+      'profile': 'https://.jpg', 
+      'stream': {
+        'id': '397268...', 
+        'viewersCount': 4010, 
+        '__typename': 'Stream'
+      }
+    } 
+    """
+    query = self.create_gql_query(
+      "ChannelShell",
+      "c3ea5a669ec074a58df5c11ce3c27093fa38534c94286dc14b68a25d5adcbf55",
+      login=streamer_id,
+      lcpVideosEnabled=False
+    )
+    metadata = {
+      "id": None,
+      "author": None,
+      "profile": None,
+      "stream": None,
+    }
+    try:
+      res = requests.post(
+        "https://gql.twitch.tv/gql", 
+        data=json.dumps(query),
+        headers={
+          "Client-ID": "kimne78kx3ncx6brgo4mv6wki5h1ko",
+        }
+      )
+      contents = res.json()
+      user = contents["data"]["userOrError"]
+      metadata["id"] = user["id"]
+      metadata["author"] = user["displayName"]
+      metadata["profile"] = user["profileImageURL"]
+      metadata["stream"] = user["stream"]
+    except Exception as e:
+      logger.error(f'[get_channel_metadata] {streamer_id}')
+      logger.error(f'{e}')
+      logger.error(traceback.format_exc())
+    finally:
+      logger.debug(f"[get_channel_metadata][{streamer_id}] {metadata}")
+      return metadata
+
+  def get_stream_metadata(self, streamer_id):
+    '''
+    returns
+    {'id': '39726838647', 'category': 'Just Chatting', 'categoryType': 'Game', 'title': '화질테스트 on'}
+    '''
+    query = self.create_gql_query(
+      "StreamMetadata",
+      "059c4653b788f5bdb2f5a2d2a24b0ddc3831a15079001a3d927556a96fb0517f",
+      channelLogin=streamer_id
+    )
+    metadata = {
+      "id": None,
+      "category": None,
+      "categoryType": None,
+      "title": None,
+    }
+    try:
+      res = requests.post(
+        "https://gql.twitch.tv/gql", 
+        data=json.dumps(query),
+        headers={
+          "Client-ID": "kimne78kx3ncx6brgo4mv6wki5h1ko",
+        }
+      )
+      contents = res.json() 
+      user = contents["data"]["user"]
+      metadata["id"] = user["lastBroadcast"]["id"]
+      metadata["category"] = user["stream"]["game"]["name"]
+      metadata["categoryType"] = user["stream"]["game"]["__typename"]
+      metadata["title"] = user["lastBroadcast"]["title"]
+    except Exception as e:
+      logger.error(f'[get_stream_metadata] {streamer_id}')
+      logger.error(f'{e}')
+      logger.error(traceback.format_exc())
+    finally:
+      logger.debug(f"[get_stream_metadata][{streamer_id}] {metadata}")
+      return metadata
+
+
   def is_online(self, streamer_id):
     '''
     return True if stream exists
     do not check metadata but just update
     '''
-    self.get_metadata(streamer_id)
-    return len(self.get_streams(streamer_id)) > 0
-
-
-  def get_metadata(self, streamer_id):
-    '''
-    returns
-    {'id': '44828369517', 'author': 'heavyRainism', 'category': 'The King of Fighters XV', 'title': '호우!'}
-
-    매번 새로운 값을 가져오기 위해서 세션 새로 생성
-    '''
-    import streamlink
-    if self.streamlink_session is None:
-      self.set_streamlink_session()
-    # 5.0.0 이상에서는 (plugin_name, streamlink_plugin_class, url) 으로 할당해야 함.
-    (plugin_name, streamlink_plugin_class, url) = self.streamlink_session.resolve_url(f'https://www.twitch.tv/{streamer_id}')
-    streamlink_plugin = streamlink_plugin_class(self.streamlink_session, url)
-    streamlink_plugin._get_metadata()
-    return {
-      "id": streamlink_plugin.id,
-      "title": str(streamlink_plugin.title),
-      "author": str(streamlink_plugin.author),
-      "category": str(streamlink_plugin.category),
-    }
+    channel_metadata = self.get_channel_metadata(streamer_id)
+    return channel_metadata["stream"] != None
 
 
   def update_metadata(self, streamer_id):
     try:
-      metadata = {}
+      stream_metadata = {}
       if not self.download_status[streamer_id]['running']:
         raise Exception(f'{streamer_id} is not online')
       if len(self.download_status[streamer_id]['title']) < 1 or len(self.download_status[streamer_id]['category']) < 1:
         raise Exception(f'the status of {streamer_id} has not been set. title: {self.download_status[streamer_id]["title"]}. category: {self.download_status[streamer_id]["category"]} ')
-      metadata = self.get_metadata(streamer_id)
-      if self.download_status[streamer_id]['title'][-1] != metadata['title'] or \
-        self.download_status[streamer_id]['category'][-1] != metadata['category']:
-        logger.debug(f'[{streamer_id}] metadata updated: {metadata}')
+      stream_metadata = self.get_stream_metadata(streamer_id)
+      if self.download_status[streamer_id]['title'][-1] != stream_metadata['title'] or \
+        self.download_status[streamer_id]['category'][-1] != stream_metadata['category']:
+        logger.debug(f'[{streamer_id}] metadata updated: {stream_metadata}')
         self.set_download_status(streamer_id, {
-          'title': self.download_status[streamer_id]['title'] + [metadata['title']],
-          'category': self.download_status[streamer_id]['category'] + [metadata['category']],
+          'title': self.download_status[streamer_id]['title'] + [stream_metadata['title']],
+          'category': self.download_status[streamer_id]['category'] + [stream_metadata['category']],
           'chapter': self.download_status[streamer_id]['chapter'] + [self.download_status[streamer_id]['elapsed_time']],
         })
     except Exception as e:
       logger.error(f'Exception while downloading {streamer_id}')
       logger.error(f'{self.download_status[streamer_id]}')
-      logger.error(f'{metadata}')
+      logger.error(f'{stream_metadata}')
       logger.error(f'{e}')
       logger.error(traceback.format_exc())
 
@@ -508,18 +586,23 @@ class LogicTwitch(LogicModuleBase):
 
     result = format_str
     result = result.replace('{streamer_id}', streamer_id)
-    result = result.replace('{author}', self.download_status[streamer_id]['author'])
+    result = result.replace('{channel_id}', str(self.download_status[streamer_id]['channel_id']))
+    result = result.replace('{stream_id}', str(self.download_status[streamer_id]['stream_id']))
+    result = result.replace('{author}', str(self.download_status[streamer_id]['author']))
+    result = result.replace('{category}', str(self.download_status[streamer_id]['category'][0]))
+    result = result.replace('{quality}', str(self.download_status[streamer_id]['quality']))
+    result = datetime.now().strftime(result)
 
     # in normal filesystem, filename length is 256 bytes
+    # title이 가장 많은 길이를 차지할 것이라고 가정함.
     title_limit = 147
-    original_title = self.download_status[streamer_id]['title'][0]
-    truncated_title = self.truncate_string_in_byte_size(original_title, title_limit)
-
-    result = result.replace('{title}', truncated_title)
-
-    result = result.replace('{category}', self.download_status[streamer_id]['category'][0])
-    result = result.replace('{quality}', self.download_status[streamer_id]['quality'])
-    result = datetime.now().strftime(result)
+    original_title = str(self.download_status[streamer_id]['title'][0])
+    length_test_result = result.replace('{title}', original_title)
+    if len(length_test_result.encode('utf8')) > 224: # 256 - 32
+      truncated_title = self.truncate_string_in_byte_size(original_title, title_limit)
+      result = result.replace('{title}', truncated_title) 
+    else:
+      result = length_test_result
     result = self.replace_unavailable_characters_in_filename(result)
     return result
 
@@ -558,7 +641,9 @@ class LogicTwitch(LogicModuleBase):
       'enable': enable_value,
       'manual_stop': False,
       'online': False,
+      'channel_id': '',
       'author': 'No Author',
+      'stream_id': '',
       'title': [],
       'category': [],
       'chapter': [],
@@ -591,14 +676,16 @@ class LogicTwitch(LogicModuleBase):
         'online': True,
         'manual_stop': False,
       })
-      metadata = self.get_metadata(streamer_id)
-      while metadata['author'] is None:
-        metadata = self.get_metadata(streamer_id)
+      channel_metadata = self.get_channel_metadata(streamer_id)
+      stream_metadata = self.get_stream_metadata(streamer_id)
+
       (quality, stream) = self.select_stream(streamer_id)
       self.set_download_status(streamer_id, {
-        'author': metadata['author'],
-        'title': [metadata['title']],
-        'category': [metadata['category']],
+        'channel_id': channel_metadata['id'],
+        'author': channel_metadata['author'],
+        'stream_id': stream_metadata['id'],
+        'title': [stream_metadata['title']],
+        'category': [stream_metadata['category']],
         'chapter': ['00:00:00'],
         'quality': quality,
         'url': stream.url,
@@ -685,7 +772,7 @@ class LogicTwitch(LogicModuleBase):
         # line = line.strip()
         # logger.debug(line)
         try:
-          if (datetime.now() - metadata_last_check_time).total_seconds() > 5 * 60:
+          if (datetime.now() - metadata_last_check_time).total_seconds() > 2 * 60:
             metadata_last_check_time = datetime.now()
             self.update_metadata(streamer_id)
 
