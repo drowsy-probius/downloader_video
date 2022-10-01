@@ -402,7 +402,7 @@ class LogicTwitch(LogicModuleBase):
       if not self.download_status[streamer_id]['running']:
         raise Exception(f'{streamer_id} is not running')
       if len(self.download_status[streamer_id]['title']) < 1 or len(self.download_status[streamer_id]['category']) < 1:
-        raise Exception(f'the status of {streamer_id} has not been set. title: {self.download_status[streamer_id]["title"]}. category: {self.download_status[streamer_id]["category"]} ')
+        raise Exception(f'the status of {streamer_id} has not been set. {self.download_status[streamer_id]}')
       if self.download_status[streamer_id]['title'][-1] != stream_metadata['title'] or \
         self.download_status[streamer_id]['category'][-1] != stream_metadata['category']:
         logger.debug(f'[{streamer_id}] metadata updated: {stream_metadata}')
