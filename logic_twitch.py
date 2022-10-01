@@ -54,6 +54,7 @@ class LogicTwitch(LogicModuleBase):
   download_status = {}
   '''
   'streamer_id': {
+    'streamer_id': str,
     'db_id': 0,
     'running': bool,
     'enable': bool,
@@ -212,11 +213,6 @@ class LogicTwitch(LogicModuleBase):
         if self.download_status[streamer_id]['running']:
           continue
         if not self.is_online(streamer_id):
-          '''
-          간혹 다운로드 완료 후에 상태 업데이트가 되는 경우가 있음
-          다음 스케쥴러 실행시에 초기화
-          '''
-          self.clear_properties(streamer_id)
           continue
         self.set_download_status(streamer_id, {'running': True})
         t = threading.Thread(target=self.download_thread_function, args=(streamer_id, ))
@@ -404,7 +400,7 @@ class LogicTwitch(LogicModuleBase):
       stream_metadata = {}
       stream_metadata = self.get_stream_metadata(streamer_id)
       if not self.download_status[streamer_id]['running']:
-        raise Exception(f'{streamer_id} is not online')
+        raise Exception(f'{streamer_id} is not running')
       if len(self.download_status[streamer_id]['title']) < 1 or len(self.download_status[streamer_id]['category']) < 1:
         raise Exception(f'the status of {streamer_id} has not been set. title: {self.download_status[streamer_id]["title"]}. category: {self.download_status[streamer_id]["category"]} ')
       if self.download_status[streamer_id]['title'][-1] != stream_metadata['title'] or \
@@ -633,6 +629,7 @@ class LogicTwitch(LogicModuleBase):
     if streamer_id in self.download_status:
       enable_value = self.download_status[streamer_id]['enable']
     default_values = {
+      'streamer': streamer_id,
       'db_id': -1,
       'running': False,
       'enable': enable_value,
@@ -732,6 +729,7 @@ class LogicTwitch(LogicModuleBase):
       if downloadResult == -1: # 다운 시작 전에 취소됨.
         logger.debug(f"[{streamer_id}] stopped by user before download")
       else:
+        logger.debug(f"[{streamer_id}] stream ended")
         if self.download_status[streamer_id]['export_chapter']:
           filepath = '.'.join(self.download_status[streamer_id]['save_files'][0].split('.')[0:-1])
           chapter_file = filepath + '.chapter.txt'
@@ -747,7 +745,7 @@ class LogicTwitch(LogicModuleBase):
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
     finally:
-      self.clear_download_status(streamer_id)
+      self.clear_properties(streamer_id)
       if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
         del self.download_status[streamer_id]
 
