@@ -344,11 +344,10 @@ class LogicTwitch(LogicModuleBase):
       metadata["profile"] = user["profileImageURL"]
       metadata["stream"] = user["stream"]
     except Exception as e:
-      logger.error(f'[get_channel_metadata] {streamer_id}')
+      logger.error(f'[get_channel_metadata] {streamer_id} {metadata}')
       logger.error(f'{e}')
       logger.error(traceback.format_exc())
     finally:
-      logger.debug(f"[get_channel_metadata][{streamer_id}] {metadata}")
       return metadata
 
   def get_stream_metadata(self, streamer_id):
@@ -382,11 +381,10 @@ class LogicTwitch(LogicModuleBase):
       metadata["categoryType"] = user["stream"]["game"]["__typename"]
       metadata["title"] = user["lastBroadcast"]["title"]
     except Exception as e:
-      logger.error(f'[get_stream_metadata] {streamer_id}')
+      logger.error(f'[get_stream_metadata] {streamer_id} {metadata}')
       logger.error(f'{e}')
       logger.error(traceback.format_exc())
     finally:
-      logger.debug(f"[get_stream_metadata][{streamer_id}] {metadata}")
       return metadata
 
 
@@ -675,6 +673,7 @@ class LogicTwitch(LogicModuleBase):
       })
       channel_metadata = self.get_channel_metadata(streamer_id)
       stream_metadata = self.get_stream_metadata(streamer_id)
+      logger.debug(f"[download_thread_function] {streamer_id} {channel_metadata} {stream_metadata}")
 
       (quality, stream) = self.select_stream(streamer_id)
       self.set_download_status(streamer_id, {
