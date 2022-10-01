@@ -729,7 +729,9 @@ class LogicTwitch(LogicModuleBase):
 
       logger.debug(f'[{streamer_id}] start to download stream: use_segment={self.download_status[streamer_id]["use_segment"]} use_ts={use_ts}')
       downloadResult = self.download_stream_ffmpeg(streamer_id)
-      if downloadResult != -1: # 다운 시작 전에 취소됨.
+      if downloadResult == -1: # 다운 시작 전에 취소됨.
+        logger.debug(f"[{streamer_id}] stopped by user before download")
+      else:
         if self.download_status[streamer_id]['export_chapter']:
           filepath = '.'.join(self.download_status[streamer_id]['save_files'][0].split('.')[0:-1])
           chapter_file = filepath + '.chapter.txt'
@@ -770,9 +772,12 @@ class LogicTwitch(LogicModuleBase):
         # line = line.strip()
         # logger.debug(line)
         try:
-          if (datetime.now() - metadata_last_check_time).total_seconds() > 2 * 60:
-            metadata_last_check_time = datetime.now()
-            self.update_metadata(streamer_id)
+          try:
+            if (datetime.now() - metadata_last_check_time).total_seconds() > 2 * 60:
+              metadata_last_check_time = datetime.now()
+              self.update_metadata(streamer_id)
+          except Exception as e:
+            pass
 
           if re.compile(r"video:(?P<videosize>\S*)\s*audio:(?P<audiosize>\S*)\s*subtitle:(?P<subsize>\S*)\s*other streams:(?P<streamsize>\S*)\s*global headers:(?P<headersize>\S*)").search(line):
             match = re.compile(r"video:(?P<videosize>\S*)\s*audio:(?P<audiosize>\S*)\s*subtitle:(?P<subsize>\S*)\s*other streams:(?P<streamsize>\S*)\s*global headers:(?P<headersize>\S*)").search(line)
@@ -895,7 +900,8 @@ class LogicTwitch(LogicModuleBase):
     metadata_option += ['-metadata', f'date={self.download_status[streamer_id]["start_time"]}']
     segment_option = ['-f', 'segment', '-segment_time', str(segment_size*60), '-reset_timestamps', '1', '-segment_start_number', '1'] if use_segment else []
     ffmpeg_command = ffmpeg_base_command + format_option + metadata_option + segment_option + [save_format]
-
+    
+    # 다운로드 요청 전에 취소될 경우에는 -1를 리턴함
     if self.download_status[streamer_id]['manual_stop']:
       return -1
 
