@@ -452,8 +452,8 @@ class LogicTwitch(LogicModuleBase):
       elapsed_time = 0
       # best가 720p와 다르면 빠져나옴.
       while elapsed_time < wait_time:
-        if (("720p" not in quality) or (quality["best"] != quality["720p"])) and \
-          (("720p60" not in quality) or (quality["best"] != quality["720p60"])):
+        if (("720p" not in streams) or (streams["best"] != streams["720p"])) and \
+          (("720p60" not in streams) or (streams["best"] != streams["720p60"])):
           break
         logger.debug(f'[{streamer_id}] waiting for source stream.')
         time.sleep(5)
