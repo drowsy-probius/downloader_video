@@ -450,17 +450,14 @@ class LogicTwitch(LogicModuleBase):
     if wait_for_1080 and quality_options[0].startswith('best') or quality_options[0].startswith('1080'):
       import time
       elapsed_time = 0
-      quality_exists = False
+      # best가 720p와 다르면 빠져나옴.
       while elapsed_time < wait_time:
-        for quality in streams:
-          if quality.startswith('1080'):
-            quality_exists = True
-            break
-        if quality_exists:
+        if (("720p" not in quality) or (quality["best"] != quality["720p"])) and \
+          (("720p60" not in quality) or (quality["best"] != quality["720p60"])):
           break
-        logger.debug(f'[{streamer_id}] waiting for 1080p60 stream.')
-        time.sleep(10)
-        elapsed_time = elapsed_time + 10
+        logger.debug(f'[{streamer_id}] waiting for source stream.')
+        time.sleep(5)
+        elapsed_time = elapsed_time + 5
         streams = self.get_streams(streamer_id)
 
     for quality in quality_options:
