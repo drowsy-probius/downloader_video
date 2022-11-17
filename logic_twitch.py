@@ -257,7 +257,12 @@ class LogicTwitch(LogicModuleBase):
           commands.append(['echo', 'python2 이하는 지원하지 않습니다.'])
         else:
           # commands.append([sys.executable, '-m', 'pip', 'install', '--upgrade', 'pip'])
-          commands.append([sys.executable, '-m', 'pip', 'install', '--upgrade', 'streamlink'])
+          commands.append([
+            sys.executable, 
+            '-m', 'pip', 'install', 
+            '--user', '--upgrade', 
+            'git+https://github.com/streamlink/streamlink.git'
+          ])
         commands.append(['msg', u'설치가 완료되었습니다.'])
         commands.append(['msg', u'재시작이 필요합니다.'])
         system.SystemLogicCommand.start('설치', commands)
