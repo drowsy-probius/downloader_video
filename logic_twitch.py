@@ -522,8 +522,8 @@ class LogicTwitch(LogicModuleBase):
         if len(option) == 2:
           self.streamlink_session.set_option(option[0], option[1])
         elif len(option) == 3:
-          if option[1] != 'api-header':
-            self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
+          logger.log(f'set_session {option}')
+          self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
     except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
@@ -917,6 +917,8 @@ class LogicTwitch(LogicModuleBase):
     segment_option = ['-f', 'segment', '-segment_time', str(segment_size*60), '-reset_timestamps', '1', '-segment_start_number', '1'] if use_segment else []
     ffmpeg_command = ffmpeg_base_command + format_option + metadata_option + segment_option + [save_format]
     
+    logger.log(streamlink_command)
+
     # 다운로드 요청 전에 취소될 경우에는 -1를 리턴함
     if self.download_status[streamer_id]['manual_stop']:
       return -1
