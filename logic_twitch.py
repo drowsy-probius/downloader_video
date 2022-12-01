@@ -522,7 +522,8 @@ class LogicTwitch(LogicModuleBase):
         if len(option) == 2:
           self.streamlink_session.set_option(option[0], option[1])
         elif len(option) == 3:
-          self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
+          if option[1] != 'api-header':
+            self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
     except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
@@ -867,7 +868,7 @@ class LogicTwitch(LogicModuleBase):
     options = self.get_options()
     for option in options:
       if len(option) == 2: # global option
-        if option[0] != "http-proxy":
+        if option[0] != "http-proxy": # do not use proxy server when opening streaming
           streamlink_options += [f'--{option[0]}', f'{option[1]}']
       else: # twitch option
         if option[1] == 'api-header':
