@@ -522,7 +522,6 @@ class LogicTwitch(LogicModuleBase):
         if len(option) == 2:
           self.streamlink_session.set_option(option[0], option[1])
         elif len(option) == 3:
-          logger.debug(f'set_session {option}')
           self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
     except Exception as e:
       logger.error(f'Exception: {e}')
@@ -871,20 +870,11 @@ class LogicTwitch(LogicModuleBase):
         if option[0] != "http-proxy": # do not use proxy server when opening streaming
           streamlink_options += [f'--{option[0]}', f'{option[1]}']
       else: # twitch option
-        if option[1] == 'api-header':
-          ''' 
-          The value of the Authorization header must be in the format of OAuth YOUR_TOKEN. 
-          Notice the space character in the argument value, which requires quotation on command line shells:
-
-          streamlink "--twitch-api-header=Authorization=OAuth abcdefghijklmnopqrstuvwxyz0123" twitch.tv/CHANNEL best
-          ''' 
-          streamlink_options += [f'"--{option[0]}-{option[1]}={option[2]}"']
-        else:
-          option_string = f'--{option[0]}-{option[1]}'
-          if str(option[2]) not in ['True', 'False']:
-            streamlink_options += [option_string, f'{option[2]}']
-          elif str(option[2]) == 'True':
-            streamlink_options += [option_string]
+        option_string = f'--{option[0]}-{option[1]}'
+        if str(option[2]) not in ['True', 'False']:
+          streamlink_options += [option_string, f'{option[2]}']
+        elif str(option[2]) == 'True':
+          streamlink_options += [option_string]
 
     start_time = datetime.now()
     end_time = ''
