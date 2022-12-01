@@ -860,8 +860,10 @@ class LogicTwitch(LogicModuleBase):
     import subprocess
     from ffmpeg.model import ModelSetting as FfmpegModelSetting
     ffmpeg_path = FfmpegModelSetting.get('ffmpeg_path')
-    url = self.download_status[streamer_id]['url'] # 프록시로 얻은 주소를 사용함.
-    quality = self.download_status[streamer_id]['quality'] # 이제 단순히 audio_only만 체크하기 위한 값
+    # 광고 제거를 위하여
+    # 다운로드에도 프록시 사용하도록 설정 
+    url = f'https://www.twitch.tv/{streamer_id}'
+    quality = self.download_status[streamer_id]['quality'] 
     use_segment = self.download_status[streamer_id]['use_segment']
     segment_size = self.download_status[streamer_id]['segment_size']
     audio_only = (quality == 'audio_only')
