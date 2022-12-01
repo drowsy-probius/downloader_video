@@ -522,7 +522,12 @@ class LogicTwitch(LogicModuleBase):
         if len(option) == 2:
           self.streamlink_session.set_option(option[0], option[1])
         elif len(option) == 3:
-          self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
+          if option[1] == 'api-header':
+            self.streamlink_session.set_plugin_option(option[0], option[1], {
+              option[2].split('=')[0]: option[2].split('=')[1]
+            })
+          else:
+            self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
     except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
