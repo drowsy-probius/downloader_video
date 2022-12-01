@@ -874,7 +874,7 @@ class LogicTwitch(LogicModuleBase):
       if len(option) == 2: # global option
         if option[0] == 'http-header':
           streamlink_options += [f'--{option[0]}={option[1]}']
-        elif option[0] != "http-proxy": # do not use proxy server when opening streaming
+        else:
           streamlink_options += [f'--{option[0]}', f'{option[1]}']
       else: # twitch option
         option_string = f'--{option[0]}-{option[1]}'
