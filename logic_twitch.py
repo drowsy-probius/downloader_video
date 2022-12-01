@@ -905,7 +905,7 @@ class LogicTwitch(LogicModuleBase):
 
     # 주소는 항상 m3u8이 되었음. 화질 1개로 고정됨.
     # streamlink option이 m3u8에서도 통할지는 모르겠지만 일단 추가해 놓음.
-    streamlink_command = [sys.executable, '-m', 'streamlink', '-O', url, "best"] + streamlink_options 
+    streamlink_command = [sys.executable, '-m', 'streamlink', '-O', url, quality] + streamlink_options 
     ffmpeg_base_command = [ffmpeg_path, '-i', '-',]
     format_option = ['-acodec', 'mp3'] if (audio_only and not use_ts) else ['-c', 'copy']
     format_option += ['-movflags', '+faststart'] if (not audio_only and not use_ts) else []
