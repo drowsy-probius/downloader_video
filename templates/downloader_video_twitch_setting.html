@@ -41,6 +41,8 @@
         ) }}
       </div>
       {{ macros.setting_input_text('twitch_proxy_url', '프록시 주소', col='9', value=arg['twitch_proxy_url'], desc=['220930이후로 한국 IP로는 최대 720p만 시청 가능합니다.', '해외 프록시를 통해서 원본 스트림 주소를 가져옵니다.', '빈 값이면 사용하지 않습니다.']) }}
+      {{ macros.setting_input_text('twitch_auth_token', 'auth-token', col='9', value=arg['twitch_auth_token'], desc=['광고 제거와 관련된 oauth token 값입니다.', 'https://streamlink.github.io/latest/cli/plugins/twitch.html#authentication', '빈 값이면 사용하지 않습니다.']) }}
+      
       {{ macros.setting_input_text_and_buttons('twitch_download_path', '저장 폴더',[['select_twitch_download_btn', '경로 선택']], value=arg['twitch_download_path'], desc=['방송 스트림이 저장될 폴더입니다.', '남은 용량이 충분한지 확인하세요.']) }}
       {{ macros.setting_checkbox('twitch_auto_make_folder', '하위 폴더 생성', value=arg['twitch_auto_make_folder'], desc='스트리머 이름으로 폴더를 생성하고 폴더 안에 다운로드합니다.') }}
       <div id="twitch_auto_make_folder_div" class="collapse">
