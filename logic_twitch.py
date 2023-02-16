@@ -726,7 +726,16 @@ class LogicTwitch(LogicModuleBase):
       })
 
       if P.ModelSetting.get_bool('notify_discord'):
-        stream_start_message = f"[ON] {self.download_status[streamer_id]['author']} - [{self.download_status[streamer_id]['category'][-1]}] {self.download_status[streamer_id]['title'][-1]} @ {self.download_status[streamer_id]['quality']}"
+        start_messages = [
+          "[ON]",
+          f"{self.download_status[streamer_id]['author']}",
+          "-"
+          f"[{self.download_status[streamer_id]['category'][-1]}]",
+          f"{self.download_status[streamer_id]['title'][-1]}",
+          "@",
+          f"{self.download_status[streamer_id]['quality']}",
+        ]
+        stream_start_message = " ".join(start_messages)
         self.send_discord_message(stream_start_message)
 
       # mkdir
@@ -767,7 +776,20 @@ class LogicTwitch(LogicModuleBase):
       downloadResult = self.download_stream_ffmpeg(streamer_id)
 
       if P.ModelSetting.get_bool('notify_discord'):
-        stream_end_message = f"[OFF] {self.download_status[streamer_id]['author']} - [{self.download_status[streamer_id]['category'][-1]}] {self.download_status[streamer_id]['title'][-1]} @ {self.download_status[streamer_id]['quality']}"
+        end_messages = [
+          "[OFF]",
+          f"{self.download_status[streamer_id]['author']}",
+          "-"
+          f"[{self.download_status[streamer_id]['category'][-1]}]",
+          f"{self.download_status[streamer_id]['title'][-1]}",
+          "@",
+          f"{self.download_status[streamer_id]['quality']}",
+          f"=> Downloaded",
+          f"{self.download_status[streamer_id]['filesize_str']}",
+          "in",
+          f"{self.download_status[streamer_id]['elapsed_time']}",
+        ]
+        stream_end_message = " ".join(end_messages)
         self.send_discord_message(stream_end_message)
 
       if downloadResult == -1: # 다운 시작 전에 취소됨.
