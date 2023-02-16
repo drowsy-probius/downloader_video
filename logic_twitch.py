@@ -222,6 +222,10 @@ class LogicTwitch(LogicModuleBase):
         t = threading.Thread(target=self.download_thread_function, args=(streamer_id, ))
         t.setDaemon(True)
         t.start()
+      
+      if P.ModelSetting.get_bool('notify_discord'):
+        stream_start_message = f"[ON] thread function"
+        self.send_discord_message(stream_start_message)
     except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
