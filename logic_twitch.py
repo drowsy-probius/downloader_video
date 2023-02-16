@@ -1275,9 +1275,9 @@ class ModelTwitchItem(db.Model):
       save_files = cls.get_file_list_by_id(item.id)
       for save_file in save_files:
         if os.path.exists(save_file) and os.path.isfile(save_file):
-          logger.debug('delete from model')
           shutil_task.remove(save_file)
       cls.delete_by_id(item.id)
+      logger.debug(f'dirty item ({item.filename}) deleted.')
     db.session.query(cls).update({'running': False})
     db.session.commit()
 
