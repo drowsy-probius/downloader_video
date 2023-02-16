@@ -30,6 +30,7 @@
         '지원 키워드: audio_only, 160p, 360p, 480p, 720p, 720p60, 1080p60, worst, best',
         '키워드는 streamlink 버전과 스트리밍 상태에 따라 바뀔 수 있음.']) 
       }}
+
       {{ macros.setting_checkbox('twitch_wait_for_1080', '1080p 화질 대기', value=arg['twitch_wait_for_1080'], desc=['트위치 자체 문제로 스트리밍 극초기에는 1080p화질이 지원되지 않습니다.', '`streamlink 화질`에 best나 1080p의 우선순위가 높으면 아래 시간만큼 기다립니다.']) }}
       <div id="twitch_wait_for_1080_div" class="collapse">
       {{ macros.setting_input_int(
@@ -40,10 +41,12 @@
         desc=['이 시간만큼 1080p 화질이 가능한 지 대기하고 시간초과시 `streamlink 화질`에서 다음으로 설정한 화질으로 다운합니다.', '단위 초']
         ) }}
       </div>
+
       {{ macros.setting_input_text('twitch_proxy_url', '프록시 주소', col='9', value=arg['twitch_proxy_url'], desc=['220930이후로 한국 IP로는 최대 720p만 시청 가능합니다.', '해외 프록시를 통해서 스트림을 다운로드합니다.', '빈 값이면 사용하지 않습니다.']) }}
       {{ macros.setting_input_text('twitch_auth_token', 'auth-token', col='9', value=arg['twitch_auth_token'], desc=['광고 제거와 관련된 oauth token 값입니다.', 'https://streamlink.github.io/latest/cli/plugins/twitch.html#authentication', '빈 값이면 사용하지 않습니다.']) }}
       
       {{ macros.setting_input_text_and_buttons('twitch_download_path', '저장 폴더',[['select_twitch_download_btn', '경로 선택']], value=arg['twitch_download_path'], desc=['방송 스트림이 저장될 폴더입니다.', '남은 용량이 충분한지 확인하세요.']) }}
+      
       {{ macros.setting_checkbox('twitch_auto_make_folder', '하위 폴더 생성', value=arg['twitch_auto_make_folder'], desc='스트리머 이름으로 폴더를 생성하고 폴더 안에 다운로드합니다.') }}
       <div id="twitch_auto_make_folder_div" class="collapse">
         {{ macros.setting_input_text(
@@ -55,6 +58,7 @@
           'title과 category는 다운 시작할 시점 기준.', '하위 디렉토리는 /으로 구분'
           ]) }}
       </div>
+
       {{ macros.setting_input_text(
         'twitch_filename_format', 
         '파일명 포맷', 
@@ -65,11 +69,14 @@
           'title과 category는 다운 시작할 시점 기준.',
           '파일 확장자는 넣지 마세요.',
         ]) }}
-      {{ macros.setting_checkbox('twitch_export_info', '챕터 정보 내보내기', value=arg['twitch_export_info'], desc=['True: 같은 파일명으로 txt생성', 'mp4파일에 쓰기: ffmpeg -i INPUT.mp4(INPUT.ts) -i 챕터정보파일.txt -map_metadata 1 -codec copy OUTPUT.mp4']) }}
+      
+        {{ macros.setting_checkbox('twitch_export_info', '챕터 정보 내보내기', value=arg['twitch_export_info'], desc=['True: 같은 파일명으로 txt생성', 'mp4파일에 쓰기: ffmpeg -i INPUT.mp4(INPUT.ts) -i 챕터정보파일.txt -map_metadata 1 -codec copy OUTPUT.mp4']) }}
       <div id="twitch_export_info_div" class="collapse">
         {{ macros.setting_checkbox('twitch_do_postprocess', '자동 후처리', value=arg['twitch_do_postprocess'], desc=['분할된 파일이라면 메타데이터는 작성가능하지만 챕터정보는 쓰지 못합니다.', 'export 된 챕터 파일과 다운로드된 스트림을 합쳐서 mp4파일로 내보냅니다.', '다운로드 된 챕터 파일과 원본 스트림은 삭제됩니다.']) }}
       </div>
+      
       {{ macros.setting_checkbox('twitch_use_ts', '스트리밍 파일 확장자', value=arg['twitch_use_ts'], desc=['True: .ts 또는 .aac', 'False: .mp4 또는 .mp3', 'True: 다운로드 중에 재생이 가능하지만 파일 metadata가 작성되지 않습니다.', 'False: 다운로드 중에 재생이 불가능하고 재시작 등의 예기치못한 종료 시에 재생이 되지 않습니다.']) }}
+      
       {{ macros.setting_checkbox('twitch_file_use_segment', '파일 분할', value=arg['twitch_file_use_segment'], desc=['각 파일의 최대 시간을 지정합니다.', '분할된 파일 사이 간에 끊김이 있을 수 있습니다.']) }}
       <div id="twitch_file_use_segment_div" class="collapse">
         {{ macros.setting_input_int(
@@ -86,6 +93,7 @@
             '단위 분',
           ]) }}
       </div>
+      
       {{ macros.setting_checkbox('streamlink_options', 'streamlink 상세 옵션 보이기', value='False', desc='') }}
       <div id="streamlink_options_div" class="collapse">
         {{ macros.setting_input_int('streamlink_hls_live_edge', '--hls_live_edge', value=arg['streamlink_hls_live_edge'], min=1, max=3) }}
@@ -94,10 +102,12 @@
         {{ macros.setting_checkbox('streamlink_twitch_disable_reruns', '--twitch-disable-reruns', value=arg['streamlink_twitch_disable_reruns']) }}
         {{ macros.setting_checkbox('streamlink_twitch_low_latency', '--twitch-low-latency', value=arg['streamlink_twitch_low_latency']) }}
       </div>
-      {{ macros.setting_checkbox('notify_discord', '디스코드 알림', value=arg['notify_discord'], desc=['방송 시작, 끝 알림']) }}
+      
+      {{ macros.setting_checkbox('notify_discord', '디스코드 알림', value=arg['notify_discord'], desc='') }}
       <div id="notify_discord_div" class="collapse">
         {{ macros.setting_input_text('notify_discord_webhook', '웹훅 주소', col='9', value=arg['notify_discord_webhook'], desc=['빈 값이면 전역 시스템 값 사용']) }}
       </div>
+      
       <div class="row justify-content-center">
         <div class="col-8">
           <div class="alert alert-warning alert-dismissible fade show" role="alert">
