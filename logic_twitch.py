@@ -15,6 +15,7 @@ from framework import app, db, scheduler, path_data
 from framework.util import Util
 from framework.common.celery import shutil_task
 from plugin import LogicModuleBase, default_route_socketio
+from tool_base import ToolBaseNotify
 # 패키지
 from .plugin import P
 logger = P.logger
@@ -49,6 +50,8 @@ class LogicTwitch(LogicModuleBase):
     'streamlink_twitch_low_latency': 'True',
     'streamlink_hls_live_edge': '2',
     'streamlink_options': 'False', # html 토글 위한 쓰레기 값임.
+    'notify_discord': 'False',
+    'notify_discord_webhook': '',
   }
   is_streamlink_installed = False
   streamlink_session = None # for download
@@ -276,6 +279,16 @@ class LogicTwitch(LogicModuleBase):
 
   #########################################################
 
+
+  def send_discord_message(self, text):
+    try:
+      local_webhook_url = P.ModelSetting.get('notify_discord_webhook')
+      webhook = None if local_webhook_url == '' else local_webhook_url
+      ret = ToolBaseNotify.send_discord_message(text, webhook_url=webhook)
+    except:
+      pass
+
+
   def create_gql_query(self, operationName, sha256hash, **variables):
     return {
       "operationName": operationName,
@@ -351,6 +364,7 @@ class LogicTwitch(LogicModuleBase):
       logger.error(traceback.format_exc())
     finally:
       return metadata
+
 
   def get_stream_metadata(self, streamer_id):
     '''
@@ -703,6 +717,11 @@ class LogicTwitch(LogicModuleBase):
         'segment_size': P.ModelSetting.get_int('twitch_file_segment_size'),
         'do_postprocess': P.ModelSetting.get_bool('twitch_do_postprocess'),
       })
+
+      if P.ModelSetting.get_bool('notify_discord'):
+        stream_start_message = f"[ON] {self.download_status[streamer_id]['author']} - [{self.download_status[streamer_id]['category'][-1]}] {self.download_status[streamer_id]['title'][-1]} @ {self.download_status[streamer_id]['quality']}"
+        self.send_discord_message(stream_start_message)
+
       # mkdir
       self.set_filepath(streamer_id)
       filename = self.parse_string_from_format(streamer_id, P.ModelSetting.get('twitch_filename_format'))
@@ -739,6 +758,11 @@ class LogicTwitch(LogicModuleBase):
 
       logger.debug(f'[{streamer_id}] start to download stream: use_segment={self.download_status[streamer_id]["use_segment"]} use_ts={use_ts}')
       downloadResult = self.download_stream_ffmpeg(streamer_id)
+
+      if P.ModelSetting.get_bool('notify_discord'):
+        stream_end_message = f"[OFF] {self.download_status[streamer_id]['author']} - [{self.download_status[streamer_id]['category'][-1]}] {self.download_status[streamer_id]['title'][-1]} @ {self.download_status[streamer_id]['quality']}"
+        self.send_discord_message(stream_end_message)
+
       if downloadResult == -1: # 다운 시작 전에 취소됨.
         logger.debug(f"[{streamer_id}] stopped by user before download")
       else:
