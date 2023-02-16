@@ -103,9 +103,15 @@
         {{ macros.setting_checkbox('streamlink_twitch_low_latency', '--twitch-low-latency', value=arg['streamlink_twitch_low_latency']) }}
       </div>
       
-      {{ macros.setting_checkbox('notify_discord', '디스코드 알림', value=arg['notify_discord'], desc='') }}
+      {{ macros.setting_checkbox('notify_discord, '하위 폴더 생성', value=arg['notify_discord], desc='') }}
       <div id="notify_discord_div" class="collapse">
-        {{ macros.setting_input_text('notify_discord_webhook', '웹훅 주소', col='9', value=arg['notify_discord_webhook'], desc=['빈 값이면 전역 시스템 값 사용']) }}
+        {{ macros.setting_input_text(
+          'notify_discord_webhook', 
+          '웹훅 주소', col='6', 
+          value=arg['notify_discord_webhook'], 
+          desc=[
+          '빈 값이면 전역 시스템 값 사용'
+          ]) }}
       </div>
       
       <div class="row justify-content-center">
