@@ -285,12 +285,17 @@ class LogicTwitch(LogicModuleBase):
 
 
   def send_discord_message(self, text):
+    webhook_url = None
     try:
-      local_webhook_url = P.ModelSetting.get('notify_discord_webhook')
-      webhook = None if local_webhook_url == '' else local_webhook_url
-      ret = ToolBaseNotify.send_discord_message(text, webhook_url=webhook)
-    except:
-      pass
+      webhook_url = P.ModelSetting.get('notify_discord_webhook')
+      if webhook_url == '':
+        from system.model import ModelSetting as SystemModelSetting
+        webhook_url = SystemModelSetting.get('notify_discord_webhook')
+        if webhook_url == '':
+          return
+      ToolBaseNotify.send_discord_message(text, webhook_url=webhook_url)
+    except Exception as e:
+      logger.error(traceback.format_exc())
 
 
   def create_gql_query(self, operationName, sha256hash, **variables):
