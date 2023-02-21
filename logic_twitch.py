@@ -729,7 +729,7 @@ class LogicTwitch(LogicModuleBase):
         start_messages = [
           "[ON]",
           f"{self.download_status[streamer_id]['author']}",
-          "-"
+          "-",
           f"[{self.download_status[streamer_id]['category'][-1]}]",
           f"{self.download_status[streamer_id]['title'][-1]}",
           "@",
@@ -779,7 +779,7 @@ class LogicTwitch(LogicModuleBase):
         end_messages = [
           "[OFF]",
           f"{self.download_status[streamer_id]['author']}",
-          "-"
+          "-",
           f"[{self.download_status[streamer_id]['category'][-1]}]",
           f"{self.download_status[streamer_id]['title'][-1]}",
           "@",
