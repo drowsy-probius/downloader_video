@@ -24,6 +24,16 @@ ModelSetting = P.ModelSetting
 #########################################################
 # main logic
 #########################################################
+
+def safely_get_value_from_dict(obj, keys=[], default="None"):
+  cursor = obj
+  for key in keys:
+    cursor = cursor.get(key)
+    if cursor is None:
+      return default
+  return cursor
+
+
 class LogicTwitch(LogicModuleBase):
   db_default = {
     'twitch_db_version': '1',
@@ -277,8 +287,8 @@ class LogicTwitch(LogicModuleBase):
       logger.error('Exception:%s', e)
       logger.error(traceback.format_exc())
 
-  #########################################################
 
+  #########################################################
 
   def send_discord_message(self, text):
     webhook_url = None
@@ -362,9 +372,9 @@ class LogicTwitch(LogicModuleBase):
         return metadata
       user = contents["data"]["userOrError"]
       metadata["id"] = str(user["id"]) # id는 없으면 에러 리턴하도록
-      metadata["author"] = user.get("displayName", "None")
-      metadata["profile"] = user.get("profileImageURL", "None")
-      metadata["stream"] = user.get("stream", {})
+      metadata["author"] = safely_get_value_from_dict(user, ["displayName"])
+      metadata["profile"] = safely_get_value_from_dict(user, ["profileImageURL"])
+      metadata["stream"] = safely_get_value_from_dict(user, ["stream"], default={})
     except Exception as e:
       logger.error(f'[get_channel_metadata] {streamer_id} {metadata}')
       logger.error(f'{e}')
@@ -403,11 +413,11 @@ class LogicTwitch(LogicModuleBase):
         raise Exception(f"{streamer_id} is offline?")
       # metadata["id"] = user.get("lastBroadcast", {}).get("id", "None")
       metadata["id"] = user["lastBroadcast"]["id"] # id는 없으면 일부러 에러 리턴하도록
-      metadata["title"] = user.get("lastBroadcast", {}).get("title", "None")
-      metadata["category"] = user.get("stream", {}).get("game", {}).get("name", "None")
-      metadata["categoryType"] = user.get("stream", {}).get("game", {}).get("__typename", "None")
+      metadata["title"] = safely_get_value_from_dict(user, ["lastBroadcast", "title"])
+      metadata["category"] = safely_get_value_from_dict(user, ["stream", "game", "name"])
+      metadata["categoryType"] = safely_get_value_from_dict(user, ["stream", "game", "__typename"])
     except Exception as e:
-      logger.error(f'[get_stream_metadata] {streamer_id} {metadata}')
+      logger.error(f'[get_stream_metadata] {user} {streamer_id} {metadata}')
       logger.error(f'{e}')
       logger.error(traceback.format_exc())
     finally:
