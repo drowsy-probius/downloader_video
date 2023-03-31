@@ -374,7 +374,7 @@ class LogicTwitch(LogicModuleBase):
       metadata["id"] = str(user["id"]) # id는 없으면 에러 리턴하도록
       metadata["author"] = safely_get_value_from_dict(user, ["displayName"])
       metadata["profile"] = safely_get_value_from_dict(user, ["profileImageURL"])
-      metadata["stream"] = safely_get_value_from_dict(user, ["stream"], default={})
+      metadata["stream"] = safely_get_value_from_dict(user, ["stream"], default=None)
     except Exception as e:
       logger.error(f'[get_channel_metadata] {streamer_id} {metadata}')
       logger.error(f'{e}')
