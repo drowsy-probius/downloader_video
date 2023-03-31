@@ -344,10 +344,10 @@ class LogicTwitch(LogicModuleBase):
       lcpVideosEnabled=False
     )
     metadata = {
-      "id": None,
-      "author": None,
-      "profile": None,
-      "stream": None,
+      "id": "None",
+      "author": "None",
+      "profile": "None",
+      "stream": "None",
     }
     try:
       res = requests.post(
@@ -361,10 +361,10 @@ class LogicTwitch(LogicModuleBase):
       if "data" not in contents:
         return metadata
       user = contents["data"]["userOrError"]
-      metadata["id"] = user["id"]
-      metadata["author"] = user["displayName"]
-      metadata["profile"] = user["profileImageURL"]
-      metadata["stream"] = user["stream"]
+      metadata["id"] = str(user["id"]) # id는 없으면 에러 리턴하도록
+      metadata["author"] = user.get("displayName", "None")
+      metadata["profile"] = user.get("profileImageURL", "None")
+      metadata["stream"] = user.get("stream", {})
     except Exception as e:
       logger.error(f'[get_channel_metadata] {streamer_id} {metadata}')
       logger.error(f'{e}')
@@ -384,10 +384,10 @@ class LogicTwitch(LogicModuleBase):
       channelLogin=streamer_id
     )
     metadata = {
-      "id": None,
-      "category": None,
-      "categoryType": None,
-      "title": None,
+      "id": "None",
+      "category": "None",
+      "categoryType": "None",
+      "title": "None",
     }
     try:
       res = requests.post(
@@ -401,10 +401,11 @@ class LogicTwitch(LogicModuleBase):
       user = contents["data"]["user"]
       if user["stream"] is None:
         raise Exception(f"{streamer_id} is offline?")
-      metadata["id"] = user["lastBroadcast"]["id"]
-      metadata["title"] = user["lastBroadcast"]["title"]
-      metadata["category"] = user["stream"]["game"]["name"]
-      metadata["categoryType"] = user["stream"]["game"]["__typename"]
+      # metadata["id"] = user.get("lastBroadcast", {}).get("id", "None")
+      metadata["id"] = user["lastBroadcast"]["id"] # id는 없으면 일부러 에러 리턴하도록
+      metadata["title"] = user.get("lastBroadcast", {}).get("title", "None")
+      metadata["category"] = user.get("stream", {}).get("game", {}).get("name", "None")
+      metadata["categoryType"] = user.get("stream", {}).get("game", {}).get("__typename", "None")
     except Exception as e:
       logger.error(f'[get_stream_metadata] {streamer_id} {metadata}')
       logger.error(f'{e}')
