@@ -820,12 +820,12 @@ class LogicTwitch(LogicModuleBase):
             postprocess_thread.start()
       
       # 방송 잠깐 터진 경우에 대비해서 짧은 방송 체크
-      max_try = 3
-      for i in range(max_try):
-        if self.is_online(streamer_id):
-          self.scheduler_function()
-        if i < max_try - 1: # 마지막 요청 후에는 sleep 호출하지 않음.
-          time.sleep(4)
+      # max_try = 3
+      # for i in range(max_try):
+      #   if self.is_online(streamer_id):
+      #     self.scheduler_function()
+      #   if i < max_try - 1: # 마지막 요청 후에는 sleep 호출하지 않음.
+      #     time.sleep(4)
     except Exception as e:
       logger.error(f'Exception while downloading {streamer_id}')
       logger.error(f'Exception: {e}')
