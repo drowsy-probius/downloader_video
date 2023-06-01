@@ -538,7 +538,6 @@ class LogicTwitch(LogicModuleBase):
     if len(http_proxy) != 0:
       options = options + [
         ['http-proxy', http_proxy],
-        ['http-ssl-verify', False],
       ]
     
     http_headers = {
@@ -963,6 +962,8 @@ class LogicTwitch(LogicModuleBase):
           streamlink_options += [option_string, f'{option[2]}']
         elif str(option[2]) == 'True':
           streamlink_options += [option_string]
+
+    logger.debug(streamlink_options)
 
     start_time = datetime.now()
     end_time = ''
