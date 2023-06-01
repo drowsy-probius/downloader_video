@@ -956,13 +956,11 @@ class LogicTwitch(LogicModuleBase):
         option_string = f'--{option[0]}-{option[1]}'
         if type(option[2]) == dict:
           for k,v in option[2].items():
-            streamlink_options += [option_string, f'{k}="{v}"']
+            streamlink_options += [option_string, f'{k}={v}']
         elif str(option[2]) not in ['True', 'False']:
           streamlink_options += [option_string, f'{option[2]}']
         elif str(option[2]) == 'True':
           streamlink_options += [option_string]
-
-    logger.debug(streamlink_options)
 
     start_time = datetime.now()
     end_time = ''
@@ -982,8 +980,6 @@ class LogicTwitch(LogicModuleBase):
         'save_files': [save_format],
       })
 
-    # 주소는 항상 m3u8이 되었음. 화질 1개로 고정됨.
-    # streamlink option이 m3u8에서도 통할지는 모르겠지만 일단 추가해 놓음.
     streamlink_command = [sys.executable, '-m', 'streamlink', '-O', url, quality] + streamlink_options 
     ffmpeg_base_command = [ffmpeg_path, '-i', '-',]
     format_option = ['-acodec', 'mp3'] if (audio_only and not use_ts) else ['-c', 'copy']
