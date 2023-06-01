@@ -934,7 +934,6 @@ class LogicTwitch(LogicModuleBase):
           logger.error(f'Exception: {e}')
           logger.error(traceback.format_exc())
 
-
     import subprocess
     from ffmpeg.model import ModelSetting as FfmpegModelSetting
     ffmpeg_path = FfmpegModelSetting.get('ffmpeg_path')
@@ -1019,6 +1018,10 @@ class LogicTwitch(LogicModuleBase):
       self.set_download_status(streamer_id, {
         'status': 'unknown error',
       })
+
+    with process.stdout: 
+      for err_line in iter(process.stdout.readline, b''):
+        logger.error('%r', line)
 
     process_ret = process.wait()
     if process_ret != 0:
