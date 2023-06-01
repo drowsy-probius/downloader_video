@@ -541,15 +541,11 @@ class LogicTwitch(LogicModuleBase):
         ['http-ssl-verify', False],
       ]
     
-    http_headers = {
-      "Client-ID": "ue6666qo983tsx6so1t0vnawi233wa", # 230602 for streams
-    }
+
+    http_headers = 'Client-ID=ue6666qo983tsx6so1t0vnawi233wa;' # 230602 for streams
 
     if len(auth_token) != 0:
-      http_headers = {
-        "Authorization": f"OAuth {auth_token}", # for adblocking
-        **http_headers,
-      }
+      http_headers += f'Authorization="OAuth {auth_token}"' # for adblocking
     
     options = options + [
       ['twitch', 'api-header', http_headers]
@@ -953,16 +949,25 @@ class LogicTwitch(LogicModuleBase):
     options = self.get_options()
     for option in options:
       if len(option) == 2: # global option
-        if option[0] == 'http-header':
-          streamlink_options += [f'--{option[0]}={option[1]}']
-        else:
-          streamlink_options += [f'--{option[0]}', f'{option[1]}']
-      else: # twitch option
+        streamlink_options += [f'--{option[0]}', f'{option[1]}']
+      else:  # twitch option
         option_string = f'--{option[0]}-{option[1]}'
         if str(option[2]) not in ['True', 'False']:
           streamlink_options += [option_string, f'{option[2]}']
         elif str(option[2]) == 'True':
           streamlink_options += [option_string]
+
+      # if len(option) == 2: # global option
+      #   if option[0] == 'http-header':
+      #     streamlink_options += [f'--{option[0]}={option[1]}']
+      #   else:
+      #     streamlink_options += [f'--{option[0]}', f'{option[1]}']
+      # else: # twitch option
+      #   option_string = f'--{option[0]}-{option[1]}'
+      #   if str(option[2]) not in ['True', 'False']:
+      #     streamlink_options += [option_string, f'{option[2]}']
+      #   elif str(option[2]) == 'True':
+      #     streamlink_options += [option_string]
 
     start_time = datetime.now()
     end_time = ''
