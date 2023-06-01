@@ -539,13 +539,22 @@ class LogicTwitch(LogicModuleBase):
     ]
     if len(http_proxy) != 0:
       options = options + [
-        ['http-proxy', http_proxy]
+        ['http-proxy', http_proxy],
+        ['http-ssl-verify', False],
       ]
+    http_headers = {
+      "Client-ID": "ue6666qo983tsx6so1t0vnawi233wa", # 230602
+    }
+
     if len(auth_token) != 0:
-      options = options + [
-        ['http-header', f'Authorization=OAuth {auth_token}'],
-        ['http-headers', f'Authorization=OAuth {auth_token}'],
-      ]
+      http_headers = {
+        "Authorization": f"OAuth {auth_token}",
+        **http_headers,
+      }
+    
+    options = options + [
+      ['http-headers', http_headers]
+    ]
     return options
 
 
