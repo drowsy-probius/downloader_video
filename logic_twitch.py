@@ -469,6 +469,7 @@ class LogicTwitch(LogicModuleBase):
       self.set_streamlink_session()
     # 5.0.0 이상에서는 (plugin_name, streamlink_plugin_class, url) 으로 할당해야 함.
     (plugin_name, streamlink_plugin_class, url) = self.streamlink_session.resolve_url(f'https://www.twitch.tv/{streamer_id}')
+    print(plugin_name, dir(steamlink_plugin_class), url)
     streamlink_plugin = streamlink_plugin_class(self.streamlink_session, url)
     streams = streamlink_plugin.streams()
     return {q:streams[q] for q in streams}
