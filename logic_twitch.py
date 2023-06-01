@@ -545,7 +545,8 @@ class LogicTwitch(LogicModuleBase):
       ]
     if len(auth_token) != 0:
       options = options + [
-        ['http-header', f'Authorization=OAuth {auth_token}']
+        ['http-header', f'Authorization=OAuth {auth_token}'],
+        ['http-headers', f'Authorization=OAuth {auth_token}'],
       ]
     return options
 
