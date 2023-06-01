@@ -540,18 +540,19 @@ class LogicTwitch(LogicModuleBase):
         ['http-proxy', http_proxy],
         ['http-ssl-verify', False],
       ]
+    
     http_headers = {
-      "Client-ID": "ue6666qo983tsx6so1t0vnawi233wa", # 230602
+      "Client-ID": "ue6666qo983tsx6so1t0vnawi233wa", # 230602 for streams
     }
 
     if len(auth_token) != 0:
       http_headers = {
-        "Authorization": f"OAuth {auth_token}",
+        "Authorization": f"OAuth {auth_token}", # for adblocking
         **http_headers,
       }
     
     options = options + [
-      ['http-headers', http_headers]
+      ['twitch', 'api-header', http_headers]
     ]
     return options
 
@@ -563,12 +564,7 @@ class LogicTwitch(LogicModuleBase):
       options = self.get_options()
       for option in options:
         if len(option) == 2:
-          if option[0] == 'api-header':
-            self.streamlink_session.set_option(option[0], {
-              option[1].split('=')[0]: option[1].split('=')[1]
-            })
-          else:
-            self.streamlink_session.set_option(option[0], option[1])
+          self.streamlink_session.set_option(option[0], option[1])
         elif len(option) == 3:
           self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
     except Exception as e:
