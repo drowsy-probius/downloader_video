@@ -1019,13 +1019,10 @@ class LogicTwitch(LogicModuleBase):
         'status': 'unknown error',
       })
 
-    with process.stdout: 
-      for err_line in iter(process.stdout.readline, b''):
-        logger.error('%r', line)
-
     process_ret = process.wait()
     if process_ret != 0:
       logger.debug(f'process return code: {process_ret}')
+      logger.error(list(process.stdout.readline))
 
     end_time = datetime.now()
     elapsed_time = (end_time - start_time).total_seconds()
