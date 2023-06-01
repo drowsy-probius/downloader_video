@@ -1022,7 +1022,7 @@ class LogicTwitch(LogicModuleBase):
     process_ret = process.wait()
     if process_ret != 0:
       logger.debug(f'process return code: {process_ret}')
-      logger.error(list(process.stdout.readline))
+      logger.error(process.stdout.readline())
 
     end_time = datetime.now()
     elapsed_time = (end_time - start_time).total_seconds()
