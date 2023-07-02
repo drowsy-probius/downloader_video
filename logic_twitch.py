@@ -992,6 +992,7 @@ class LogicTwitch(LogicModuleBase):
     ffmpeg_command = ffmpeg_base_command + format_option + metadata_option + segment_option + [save_format]
     
     logger.debug(streamlink_command)
+    logger.debug(ffmpeg_command)
 
     # 다운로드 요청 전에 취소될 경우에는 -1를 리턴함
     if self.download_status[streamer_id]['manual_stop']:
