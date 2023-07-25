@@ -564,8 +564,8 @@ class LogicTwitch(LogicModuleBase):
       for option in options:
         if len(option) == 2:
           self.streamlink_session.set_option(option[0], option[1])
-        elif len(option) == 3:
-          self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
+      #  elif len(option) == 3:
+      #    self.streamlink_session.set_plugin_option(option[0], option[1], option[2])
     except Exception as e:
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
@@ -725,7 +725,9 @@ class LogicTwitch(LogicModuleBase):
       stream_metadata = self.get_stream_metadata(streamer_id)
       logger.debug(f"[download_thread_function] {streamer_id} {channel_metadata} {stream_metadata}")
 
-      (quality, stream) = self.select_stream(streamer_id)
+      # (quality, stream) = self.select_stream(streamer_id)
+      quality = "best"
+
       self.set_download_status(streamer_id, {
         'channel_id': channel_metadata['id'],
         'author': channel_metadata['author'],
@@ -734,7 +736,8 @@ class LogicTwitch(LogicModuleBase):
         'category': [stream_metadata['category']],
         'chapter': ['00:00:00'],
         'quality': quality,
-        'url': stream.url,
+        # 'url': stream.url,
+        'url': "NA",
         'options': self.get_options(),
         'use_ts': P.ModelSetting.get_bool('twitch_use_ts'),
         'use_segment': P.ModelSetting.get_bool('twitch_file_use_segment'),
