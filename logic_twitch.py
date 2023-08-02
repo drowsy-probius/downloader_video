@@ -762,6 +762,9 @@ class LogicTwitch(LogicModuleBase):
       self.set_filepath(streamer_id)
       filename = self.parse_string_from_format(streamer_id, P.ModelSetting.get('twitch_filename_format'))
       if self.download_status[streamer_id]['use_segment']:
+        # ffmpeg templace escape percent character
+        filename = filename.replace('%', '%%')
+
         if '{part_number}' in filename:
           filename = filename.replace('{part_number}', '%02d')
         else:
@@ -826,6 +829,7 @@ class LogicTwitch(LogicModuleBase):
           if (quality != 'audio_only') and self.download_status[streamer_id]['do_postprocess']:
             postprocess_thread = threading.Thread(target=self.ffmpeg_postprocess, args=(self.download_status[streamer_id], ))
             postprocess_thread.start()
+            postprocess_thread.join()
       
       # 방송 잠깐 터진 경우에 대비해서 짧은 방송 체크
       # max_try = 3
@@ -1023,6 +1027,10 @@ class LogicTwitch(LogicModuleBase):
     if process_ret != 0:
       logger.debug(f'process return code: {process_ret}')
       logger.error(process.stdout.readline())
+    
+    process.terminate()
+    streamlink_process.terminate()
+    log_thread.join()
 
     end_time = datetime.now()
     elapsed_time = (end_time - start_time).total_seconds()
