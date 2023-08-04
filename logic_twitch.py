@@ -431,7 +431,7 @@ class LogicTwitch(LogicModuleBase):
     do not check metadata but just update
     '''
     channel_metadata = self.get_channel_metadata(streamer_id)
-    return channel_metadata["stream"] != None
+    return str(channel_metadata["stream"]) != str(None)
 
 
   def update_metadata(self, streamer_id):
@@ -815,8 +815,8 @@ class LogicTwitch(LogicModuleBase):
         stream_end_message = " ".join(end_messages)
         self.send_discord_message(stream_end_message)
 
-      if downloadResult == -1: # 다운 시작 전에 취소됨.
-        logger.debug(f"[{streamer_id}] stopped by user before download")
+      if downloadResult == -1 or len(self.download_status[streamer_id]['save_files']) == 0: # 다운 시작 전에 취소됨.
+        logger.debug(f"[{streamer_id}] stopped before download")
       else:
         logger.debug(f"[{streamer_id}] stream ended")
         if self.download_status[streamer_id]['export_chapter']:
@@ -842,6 +842,7 @@ class LogicTwitch(LogicModuleBase):
       logger.error(f'Exception while downloading {streamer_id}')
       logger.error(f'Exception: {e}')
       logger.error(traceback.format_exc())
+      return False
     finally:
       self.clear_properties(streamer_id)
       if streamer_id not in [sid for sid in P.ModelSetting.get_list('twitch_streamer_ids', '|') if not sid.startswith('#')]:
@@ -1047,6 +1048,8 @@ class LogicTwitch(LogicModuleBase):
     })
     if len([i for i in self.download_status[streamer_id]['save_files'] if len(i)]) == 0:
       ModelTwitchItem.delete_by_id(self.download_status[streamer_id]['db_id'])
+
+    return process_ret
 
 
   def export_info(self, item):
